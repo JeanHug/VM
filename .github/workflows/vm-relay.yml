@@ -53,13 +53,16 @@ jobs:
         run: |
           ./scripts/backup-sync.sh restore
 
-      - name: Start Web Desktop (Webtop XFCE)
+      - name: Start Web Desktop with Google Chrome
         run: |
           ./scripts/setup-desktop.sh
 
-      - name: Start Cloudflare Tunnel
+      - name: Auto-Configure & Start Cloudflare Tunnel
         env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          CLOUDFLARE_ID: ${{ secrets.CLOUDFLARE_ID }}
         run: |
           ./scripts/start-tunnel.sh
 
@@ -67,6 +70,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          CLOUDFLARE_ID: ${{ secrets.CLOUDFLARE_ID }}
           RELAY_CYCLE: ${{ github.event.inputs.relay_cycle || 1 }}
           SESSION_ID: ${{ github.event.inputs.session_id || 'session-main' }}
           SYNC_INTERVAL_MINS: ${{ github.event.inputs.sync_interval_mins || 10 }}
