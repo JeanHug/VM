@@ -9,61 +9,72 @@ DATA_DIR="/home/runner/vm_data"
 mkdir -p "$DATA_DIR"
 sudo chown -R 1000:1000 "$DATA_DIR"
 
-echo "=== [2/3] Démarrage du conteneur Webtop Ubuntu-XFCE ==="
-docker pull lscr.io/linuxserver/webtop:ubuntu-xfce
+echo "=== [2/3] Installation des paquets X11, noVNC, XFCE & Google Chrome ==="
+export DEBIAN_FRONTEND=noninteractive
 
-docker rm -f webtop 2>/dev/null || true
-
-# Lancement du conteneur avec port 3000 exposé
-docker run -d \
-  --name webtop \
-  --restart unless-stopped \
-  --security-opt seccomp=unconfined \
-  -e PUID=1000 \
-  -e PGID=1000 \
-  -e TZ=Europe/Paris \
-  -e SUBFOLDER=/ \
-  -e TITLE="Linux Cloud Web Desktop (Chrome & XFCE)" \
-  -p 3000:3000 \
-  -v "$DATA_DIR":/config \
-  --shm-size="2gb" \
-  lscr.io/linuxserver/webtop:ubuntu-xfce
-
-echo "=== [3/3] Attente du démarrage de l'interface Webtop ==="
-for i in {1..40}; do
-  if curl -s -f http://127.0.0.1:3000/ > /dev/null 2>&1 || curl -s -k -f https://127.0.0.1:3000/ > /dev/null 2>&1; then
-    echo " Interface Web active !"
-    break
-  fi
-  echo "Initialisation en cours ($i/40)..."
-  sleep 2
-done
+sudo apt-get update -qq
+sudo apt-get install -y --no-install-recommends \
+  xvfb \
+  x11vnc \
+  novnc \
+  websockify \
+  xfce4 \
+  xfce4-terminal \
+  dbus-x11 \
+  wget \
+  curl \
+  ca-certificates \
+  gnupg \
+  git \
+  htop \
+  python3 > /dev/null 2>&1 || true
 
 # Installation de Google Chrome officiel
-echo "=== Installation de Google Chrome officiel ==="
-docker exec -u 0 webtop bash -c "
-  apt-get update && \
-  apt-get install -y --no-install-recommends wget curl gnupg git python3 python3-pip htop nano unzip ca-certificates && \
-  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg && \
-  echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list && \
-  apt-get update && \
-  apt-get install -y --no-install-recommends google-chrome-stable && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/*" || true
+if ! command -v google-chrome &> /dev/null; then
+  echo "Installation de Google Chrome..."
+  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
+  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
+  sudo apt-get update -qq || true
+  sudo apt-get install -y --no-install-recommends google-chrome-stable > /dev/null 2>&1 || true
+fi
 
-docker exec -u 1000 webtop bash -c "
-  mkdir -p /config/Desktop
-  cat << 'DESKTOP_EOF' > /config/Desktop/google-chrome.desktop
-[Desktop Entry]
-Version=1.0
-Name=Google Chrome
-Comment=Accéder au Web
-Exec=/usr/bin/google-chrome-stable --no-sandbox --disable-dev-shm-usage %U
-Terminal=false
-Icon=google-chrome
-Type=Application
-Categories=Network;WebBrowser;
-DESKTOP_EOF
-  chmod +x /config/Desktop/google-chrome.desktop" || true
+echo "=== [3/3] Démarrage du serveur d'affichage X11 + Desktop + noVNC ==="
+export DISPLAY=:1
 
-echo " Bureau visuel et Google Chrome configurés !"
+# Arrêt d'éventuels processus précédents
+pkill -f Xvfb || true
+pkill -f x11vnc || true
+pkill -f websockify || true
+pkill -f xfce4-session || true
+
+# 1. Lancement de Xvfb (résolution 1280x800, 24 bits de couleur)
+Xvfb :1 -screen 0 1280x800x24 &
+sleep 2
+
+# 2. Lancement de l'environnement de bureau XFCE
+dbus-launch --exit-with-session startxfce4 &
+sleep 3
+
+# 3. Lancement du serveur VNC local (sans mot de passe, écoute uniquement sur 127.0.0.1:5900)
+x11vnc -display :1 -nopw -listen 127.0.0.1 -xkb -forever -shared -bg &
+sleep 2
+
+# 4. Lancement de noVNC / websockify sur le port HTTP 3000
+# /usr/share/novnc est le dossier des assets web HTML5
+if [ -d "/usr/share/novnc" ]; then
+  NOVNC_WEB="/usr/share/novnc"
+else
+  NOVNC_WEB="/usr/local/share/novnc"
+fi
+
+# Raccourci index.html pointant sur vnc.html avec autoconnect
+sudo cp $NOVNC_WEB/vnc.html $NOVNC_WEB/index.html 2>/dev/null || true
+
+# Démarrage de websockify (VNC WebSocket vers HTTP 3000)
+websockify --web=$NOVNC_WEB 3000 127.0.0.1:5900 &
+sleep 2
+
+# Lancement automatique de Google Chrome dans la session X11
+nohup google-chrome --no-sandbox --disable-dev-shm-usage --start-maximized "https://google.com" > /dev/null 2>&1 &
+
+echo " Bureau visuel noVNC HTTP 3000 opérationnel !"
