@@ -10,8 +10,8 @@ echo "=================================================="
 echo "    ORCHESTRATEUR DE RELAIS DE LA VM WEB LINUX    "
 echo "=================================================="
 echo "Cycle actuel          : $RELAY_CYCLE"
-echo "Sauvegarde toutes les   : $SYNC_INTERVAL_MINS minutes"
-echo "Déclenchement relais   : à $RELAY_TRIGGER_MINS minutes (5h15)"
+echo "Sauvegarde toutes les : $SYNC_INTERVAL_MINS minutes"
+echo "Déclenchement relais  : à $RELAY_TRIGGER_MINS minutes (5h15)"
 echo "Arrêt propre          : à $RELAY_SHUTDOWN_MINS minutes (5h45)"
 echo "=================================================="
 
@@ -21,17 +21,13 @@ TRIGGER_TIME=$(( START_TIME + RELAY_TRIGGER_MINS * 60 ))
 SHUTDOWN_TIME=$(( START_TIME + RELAY_SHUTDOWN_MINS * 60 ))
 RELAY_TRIGGERED=false
 
-# Gestion de l'arrêt propre et passation de relais
 cleanup_and_exit() {
   echo ""
   echo "=== [RELAY HANDOFF] Début de la passation de relais ==="
   echo "1. Sauvegarde delta finale des données..."
   ./scripts/backup-sync.sh backup || true
   
-  echo "2. Arrêt du watchdog et du tunnel Cloudflare..."
-  if [ -f /tmp/cf_watchdog.pid ]; then
-    kill $(cat /tmp/cf_watchdog.pid) 2>/dev/null || true
-  fi
+  echo "2. Arrêt propre du tunnel Cloudflare..."
   pkill -9 -f cloudflared 2>/dev/null || true
   
   echo "3. Arrêt du conteneur de bureau..."
@@ -48,6 +44,15 @@ while true; do
   ELAPSED_SECS=$(( NOW - START_TIME ))
   ELAPSED_MINS=$(( ELAPSED_SECS / 60 ))
   
+  # Vérifier la santé du processus cloudflared
+  CF_PID=$(cat /tmp/cloudflared.pid 2>/dev/null || true)
+  if [ -n "$CF_PID" ] && ! ps -p "$CF_PID" > /dev/null 2>&1; then
+    echo "[ORCHESTRATEUR $(date +'%T')] ⚠️ Processus cloudflared arrêté inopinément ! Derniers logs :"
+    tail -n 25 /tmp/cloudflared.log 2>/dev/null || true
+    echo "Relance de cloudflared..."
+    ./scripts/start-tunnel.sh || true
+  fi
+
   # 1. Sauvegarde périodique
   if [ "$NOW" -ge "$NEXT_BACKUP_TIME" ]; then
     echo "[$(date +'%T')] Exécution de la sauvegarde programmée (Uptime: ${ELAPSED_MINS}m)..."
