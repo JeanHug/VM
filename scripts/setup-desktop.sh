@@ -9,12 +9,12 @@ DATA_DIR="/home/runner/vm_data"
 mkdir -p "$DATA_DIR"
 sudo chown -R 1000:1000 "$DATA_DIR"
 
-echo "=== [2/3] Démarrage du conteneur Webtop Ubuntu-XFCE (HTTP pur sans TLS interne) ==="
+echo "=== [2/3] Démarrage du conteneur Webtop Ubuntu-XFCE ==="
 docker pull lscr.io/linuxserver/webtop:ubuntu-xfce
 
 docker rm -f webtop 2>/dev/null || true
 
-# On désactive le SSL auto-signé interne de KasmVNC pour éviter les blocages 502/SSL
+# Lancement du conteneur avec port 3000 exposé
 docker run -d \
   --name webtop \
   --restart unless-stopped \
@@ -24,19 +24,18 @@ docker run -d \
   -e TZ=Europe/Paris \
   -e SUBFOLDER=/ \
   -e TITLE="Linux Cloud Web Desktop (Chrome & XFCE)" \
-  -e NO_SSL=true \
   -p 3000:3000 \
   -v "$DATA_DIR":/config \
   --shm-size="2gb" \
   lscr.io/linuxserver/webtop:ubuntu-xfce
 
-echo "=== [3/3] Vérification du port HTTP Webtop 3000 ==="
-for i in {1..35}; do
-  if curl -s -f http://127.0.0.1:3000/ > /dev/null 2>&1; then
-    echo " Port HTTP 3000 opérationnel !"
+echo "=== [3/3] Attente du démarrage de l'interface Webtop ==="
+for i in {1..40}; do
+  if curl -s -f http://127.0.0.1:3000/ > /dev/null 2>&1 || curl -s -k -f https://127.0.0.1:3000/ > /dev/null 2>&1; then
+    echo " Interface Web active !"
     break
   fi
-  echo "En attente du démarrage du serveur KasmVNC ($i/35)..."
+  echo "Initialisation en cours ($i/40)..."
   sleep 2
 done
 
