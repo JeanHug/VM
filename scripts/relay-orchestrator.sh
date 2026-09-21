@@ -21,26 +21,18 @@ TRIGGER_TIME=$(( START_TIME + RELAY_TRIGGER_MINS * 60 ))
 SHUTDOWN_TIME=$(( START_TIME + RELAY_SHUTDOWN_MINS * 60 ))
 RELAY_TRIGGERED=false
 
-# Gestion de l'arrêt propre et nettoyage Cloudflare
+# Gestion de l'arrêt propre et passation de relais
 cleanup_and_exit() {
   echo ""
   echo "=== [RELAY HANDOFF] Début de la passation de relais ==="
   echo "1. Sauvegarde delta finale des données..."
   ./scripts/backup-sync.sh backup || true
   
-  echo "2. Arrêt du tunnel Cloudflare..."
-  if [ -f /tmp/cloudflared.pid ]; then
-    PID=$(cat /tmp/cloudflared.pid)
-    kill "$PID" 2>/dev/null || true
+  echo "2. Arrêt du watchdog et du tunnel Cloudflare..."
+  if [ -f /tmp/cf_watchdog.pid ]; then
+    kill $(cat /tmp/cf_watchdog.pid) 2>/dev/null || true
   fi
-
-  # Si un tunnel API nommé avait été créé, on le supprime de Cloudflare
-  if [ -f /tmp/cloudflare_tunnel_id.txt ] && [ -n "$CLOUDFLARE_TOKEN" ] && [ -n "$CLOUDFLARE_ID" ]; then
-    TUNNEL_ID=$(cat /tmp/cloudflare_tunnel_id.txt)
-    echo "Nettoyage du tunnel Cloudflare $TUNNEL_ID..."
-    curl -s -X DELETE "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ID/cfd_tunnel/$TUNNEL_ID" \
-      -H "Authorization: Bearer $CLOUDFLARE_TOKEN" > /dev/null 2>&1 || true
-  fi
+  pkill -9 -f cloudflared 2>/dev/null || true
   
   echo "3. Arrêt du conteneur de bureau..."
   docker stop webtop 2>/dev/null || true
