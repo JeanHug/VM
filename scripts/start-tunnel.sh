@@ -2,10 +2,9 @@
 set -e
 
 echo "=================================================="
-echo "    CLOUDFLARE PRODUCTION TUNNEL AVEC AUTO-HEAL   "
+echo "    CLOUDFLARE TUNNEL SÉCURISÉ & AUTO-RÉTABLISSEMENT"
 echo "=================================================="
 
-# 1. Vérifier ou installer cloudflared
 if ! command -v cloudflared &> /dev/null; then
   echo "Installation de cloudflared..."
   curl -s -L -o /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
@@ -13,7 +12,6 @@ if ! command -v cloudflared &> /dev/null; then
   rm -f /tmp/cloudflared.deb
 fi
 
-# Fonction de publication sur GitHub
 publish_url_to_github() {
   PUBLIC_URL="$1"
   echo "$PUBLIC_URL" > /tmp/vm_public_url.txt
@@ -41,38 +39,33 @@ publish_url_to_github() {
   fi
 }
 
-RUN_TOKEN=""
-
-# 2. Si CLOUDFLARE_TOKEN et CLOUDFLARE_ID sont présents, récupérer le vrai token d'exécution natif (eyJh...)
-if [ -n "$CLOUDFLARE_TOKEN" ] && [ -n "$CLOUDFLARE_ID" ]; then
-  echo "Récupération du token d'exécution du Named Tunnel depuis Cloudflare..."
-  TUNNEL_ID="e58f3146-7b0d-41e4-bbb4-89f101de0d84"
-  
-  TOKEN_RES=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_TOKEN"     -H "Content-Type: application/json"     "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ID/cfd_tunnel/$TUNNEL_ID/token")
-    
-  RUN_TOKEN=$(echo "$TOKEN_RES" | grep -o '"result":"[^"]*"' | cut -d'"' -f4 || true)
+# Détermination de la cible Webtop
+TARGET_ORIGIN="https://127.0.0.1:3001"
+if [ -f /tmp/webtop_target_url.txt ]; then
+  DETECTED=$(cat /tmp/webtop_target_url.txt)
+  if [ -n "$DETECTED" ]; then
+    TARGET_ORIGIN="$DETECTED"
+  fi
 fi
 
-# 3. Fonction pour démarrer cloudflared
+echo "Origine locale ciblée : $TARGET_ORIGIN"
+
 start_tunnel_process() {
   pkill -9 -f cloudflared 2>/dev/null || true
   sleep 1
-  rm -f /tmp/cloudflared.log
+  rm -f /tmp/cloudflared_quick.log
 
-  if [ -n "$RUN_TOKEN" ]; then
-    echo "Démarrage du tunnel permanent Cloudflare avec token natif..."
-    nohup cloudflared tunnel       --protocol http2       --edge-ip-version 4       run --token "$RUN_TOKEN" > /tmp/cloudflared.log 2>&1 &
-    CF_PID=$!
-    echo "$CF_PID" > /tmp/cloudflared.pid
-    echo "Tunnel permanent lancé (PID: $CF_PID)"
-  fi
-
-  # Également lancer le Quick Tunnel en parallèle pour URL instantanée trycloudflare.com
-  echo "Démarrage du proxy d'accès instantané..."
-  nohup cloudflared tunnel     --protocol http2     --edge-ip-version 4     --retries 10     --url http://127.0.0.1:3000 > /tmp/cloudflared_quick.log 2>&1 &
+  echo "[$(date +'%T')] Lancement de cloudflared vers $TARGET_ORIGIN (avec --no-tls-verify)..."
+  nohup cloudflared tunnel \
+    --no-tls-verify \
+    --protocol http2 \
+    --edge-ip-version 4 \
+    --retries 10 \
+    --url "$TARGET_ORIGIN" > /tmp/cloudflared_quick.log 2>&1 &
+    
   QUICK_PID=$!
   echo "$QUICK_PID" > /tmp/cloudflared_quick.pid
-  echo "Proxy d'accès lancé (PID: $QUICK_PID)"
+  echo "Processus cloudflared démarré (PID: $QUICK_PID)"
 
   FOUND_URL=""
   for i in {1..35}; do
@@ -86,25 +79,26 @@ start_tunnel_process() {
   if [ -n "$FOUND_URL" ]; then
     publish_url_to_github "$FOUND_URL"
   else
-    echo "⚠️ URL non trouvée dans les logs. Contenu :"
-    head -n 20 /tmp/cloudflared_quick.log || true
+    echo "⚠️ Impossible d'extraire l'URL trycloudflare :"
+    head -n 25 /tmp/cloudflared_quick.log || true
   fi
 }
 
-# Lancement initial
+# Premier lancement
 start_tunnel_process
 
-# 4. Watchdog automatique en continu
+# Watchdog d'auto-rétablissement en continu
 cat << 'WATCHDOG_SCRIPT' > /tmp/cf_watchdog.sh
 #!/usr/bin/env bash
 
 FAIL_COUNT=0
 
 while true; do
-  sleep 20
+  sleep 15
   
   QUICK_PID=$(cat /tmp/cloudflared_quick.pid 2>/dev/null || true)
   URL=$(cat /tmp/vm_public_url.txt 2>/dev/null || true)
+  TARGET_ORIGIN=$(cat /tmp/webtop_target_url.txt 2>/dev/null || echo "https://127.0.0.1:3001")
   
   RESTART=false
 
@@ -115,11 +109,12 @@ while true; do
 
   if [ "$RESTART" = false ] && [ -n "$URL" ]; then
     HTTP_CODE=$(curl -s -o /dev/null -I -w "%{http_code}" --max-time 8 "$URL" || echo "000")
+    # 502, 504, 530 ou 000
     if [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "504" ] || [ "$HTTP_CODE" = "530" ] || [ "$HTTP_CODE" = "000" ]; then
       FAIL_COUNT=$(( FAIL_COUNT + 1 ))
-      echo "[WATCHDOG $(date +'%T')] Test HTTP: $HTTP_CODE (échec $FAIL_COUNT/3)"
+      echo "[WATCHDOG $(date +'%T')] Échec HTTP $HTTP_CODE sur $URL ($FAIL_COUNT/3)"
       if [ "$FAIL_COUNT" -ge 3 ]; then
-        echo "[WATCHDOG $(date +'%T')] Déconnexion confirmée. Redémarrage automatique du tunnel..."
+        echo "[WATCHDOG $(date +'%T')] Bad Gateway détecté sur $URL ! Relance automatique du tunnel..."
         RESTART=true
         FAIL_COUNT=0
       fi
@@ -129,11 +124,18 @@ while true; do
   fi
 
   if [ "$RESTART" = true ]; then
-    echo "[WATCHDOG $(date +'%T')] Redémarrage en cours..."
+    echo "[WATCHDOG $(date +'%T')] Redémarrage de cloudflared vers $TARGET_ORIGIN..."
     pkill -9 -f cloudflared 2>/dev/null || true
     sleep 2
-    
-    nohup cloudflared tunnel       --protocol http2       --edge-ip-version 4       --retries 10       --url http://127.0.0.1:3000 > /tmp/cloudflared_quick.log 2>&1 &
+    rm -f /tmp/cloudflared_quick.log
+
+    nohup cloudflared tunnel \
+      --no-tls-verify \
+      --protocol http2 \
+      --edge-ip-version 4 \
+      --retries 10 \
+      --url "$TARGET_ORIGIN" > /tmp/cloudflared_quick.log 2>&1 &
+      
     NEW_PID=$!
     echo "$NEW_PID" > /tmp/cloudflared_quick.pid
 
@@ -148,7 +150,7 @@ while true; do
 
     if [ -n "$NEW_URL" ]; then
       echo "$NEW_URL" > /tmp/vm_public_url.txt
-      echo "[WATCHDOG $(date +'%T')] Nouvelle URL : $NEW_URL"
+      echo "[WATCHDOG $(date +'%T')] Nouveau tunnel opérationnel : $NEW_URL"
       
       if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ]; then
         TMP_DIR=$(mktemp -d)
@@ -176,4 +178,4 @@ chmod +x /tmp/cf_watchdog.sh
 nohup /tmp/cf_watchdog.sh > /tmp/cf_watchdog.log 2>&1 &
 WATCHDOG_PID=$!
 echo "$WATCHDOG_PID" > /tmp/cf_watchdog.pid
-echo " Système Cloudflare & Watchdog opérationnel."
+echo " Watchdog Cloudflare opérationnel (PID: $WATCHDOG_PID)."
