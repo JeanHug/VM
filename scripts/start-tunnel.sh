@@ -14,29 +14,25 @@ if ! command -v cloudflared &> /dev/null; then
   rm -f /tmp/cloudflared.deb
 fi
 
-# Attente et test du port HTTP 3000
-for i in {1..20}; do
-  if curl -s -f http://127.0.0.1:3000/ > /dev/null 2>&1; then
-    echo " Port HTTP 3000 prêt pour le tunnel !"
-    break
-  fi
-  sleep 1
-done
-
-# Vérifier si un token Cloudflare officiel est disponible
-if [ -n "$CLOUDFLARE_TOKEN" ]; then
-  echo "Démarrage Cloudflare Tunnel avec jeton de tunnel dédié..."
-  nohup cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TOKEN" > /tmp/cloudflared.log 2>&1 &
-  echo $! > /tmp/cloudflared.pid
+# Détecter le protocole réel qui répond sur le port 3000
+TARGET_ORIGIN=""
+if curl -s -f http://127.0.0.1:3000/ > /dev/null 2>&1; then
+  TARGET_ORIGIN="http://127.0.0.1:3000"
+  echo " Protocole HTTP détecté sur port 3000"
+elif curl -s -k -f https://127.0.0.1:3000/ > /dev/null 2>&1; then
+  TARGET_ORIGIN="https://127.0.0.1:3000"
+  echo " Protocole HTTPS auto-signé détecté sur port 3000"
+else
+  TARGET_ORIGIN="http://127.0.0.1:3000"
+  echo " Fallback par défaut vers $TARGET_ORIGIN"
 fi
 
-# Lancer le Quick Tunnel public trycloudflare.com
-echo "Démarrage du tunnel éphémère trycloudflare.com..."
-nohup cloudflared tunnel --url http://127.0.0.1:3000 --no-tls-verify > /tmp/quick_tunnel.log 2>&1 &
+echo "Démarrage Cloudflare Tunnel vers $TARGET_ORIGIN avec --no-tls-verify..."
+nohup cloudflared tunnel --url "$TARGET_ORIGIN" --no-tls-verify > /tmp/quick_tunnel.log 2>&1 &
 echo $! > /tmp/quick_tunnel.pid
 
 FOUND_URL=""
-for i in {1..35}; do
+for i in {1..40}; do
   sleep 2
   FOUND_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/quick_tunnel.log | head -n1 || true)
   if [ -n "$FOUND_URL" ]; then
