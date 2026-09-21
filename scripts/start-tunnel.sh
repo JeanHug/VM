@@ -2,10 +2,10 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION DU TUNNEL CLOUDFLARE AVEC WATCHDOG"
+echo "    CLOUDFLARE TUNNEL PRO AVEC AUTO-HEAL WATCHDOG "
 echo "=================================================="
 
-# 1. Télécharger cloudflared si non présent
+# 1. Vérification / Installation de cloudflared
 if ! command -v cloudflared &> /dev/null; then
   echo "Installation de cloudflared..."
   curl -s -L -o /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
@@ -13,16 +13,16 @@ if ! command -v cloudflared &> /dev/null; then
   rm -f /tmp/cloudflared.deb
 fi
 
-# Fonction de publication sur la branche tunnel-url du repo GitHub
+# Publication de l'URL courante sur la branche tunnel-url du repo GitHub
 publish_url_to_github() {
   PUBLIC_URL="$1"
   echo "$PUBLIC_URL" > /tmp/vm_public_url.txt
   echo "=================================================="
-  echo " NOUVELLE URL DU BUREAU WEB : $PUBLIC_URL"
+  echo " NOUVELLE URL ACTIVE DU BUREAU WEB : $PUBLIC_URL"
   echo "=================================================="
   
   if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ]; then
-    echo "Publication automatique de l'URL sur GitHub (branche tunnel-url)..."
+    echo "Publication sur GitHub (branche tunnel-url)..."
     TMP_URL_REPO=$(mktemp -d)
     cd "$TMP_URL_REPO"
     git init
@@ -41,38 +41,41 @@ publish_url_to_github() {
   fi
 }
 
-# Fonction pour lancer un Quick Tunnel et extraire l'URL
-launch_quick_tunnel() {
-  echo "[$(date +'%T')] Lancement d'un nouveau tunnel Cloudflare Quick Tunnel..."
+# Lancer un tunnel avec paramètres optimisés
+start_cloudflared_process() {
+  echo "[$(date +'%T')] Lancement de cloudflared (HTTP/2 multiplexing + keepalive)..."
   pkill -9 -f cloudflared 2>/dev/null || true
   sleep 1
+  rm -f /tmp/cloudflared.log
 
-  nohup cloudflared tunnel --url http://127.0.0.1:3000 > /tmp/cloudflared_quick.log 2>&1 &
+  # --protocol http2 évite les coupures QUIC/UDP récurrentes sur les runners GitHub Actions
+  nohup cloudflared tunnel     --protocol http2     --edge-ip-version 4     --retries 10     --url http://127.0.0.1:3000 > /tmp/cloudflared.log 2>&1 &
+    
   CF_PID=$!
-  echo "$CF_PID" > /tmp/cloudflared_quick.pid
-  echo "Processus cloudflared lancé (PID: $CF_PID)"
+  echo "$CF_PID" > /tmp/cloudflared.pid
+  echo "cloudflared démarré avec PID: $CF_PID"
 
-  FOUND_URL=""
-  for i in {1..25}; do
+  EXTRACTED_URL=""
+  for i in {1..30}; do
     sleep 2
-    FOUND_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/cloudflared_quick.log | head -n1 || true)
-    if [ -n "$FOUND_URL" ]; then
+    EXTRACTED_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/cloudflared.log | head -n1 || true)
+    if [ -n "$EXTRACTED_URL" ]; then
       break
     fi
   done
 
-  if [ -n "$FOUND_URL" ]; then
-    publish_url_to_github "$FOUND_URL"
+  if [ -n "$EXTRACTED_URL" ]; then
+    publish_url_to_github "$EXTRACTED_URL"
   else
-    echo "⚠️ Impossible de capturer l'URL trycloudflare dans les logs :"
-    cat /tmp/cloudflared_quick.log || true
+    echo "⚠️ Impossible de trouver l'URL dans les logs :"
+    head -n 25 /tmp/cloudflared.log || true
   fi
 }
 
 # Premier lancement
-launch_quick_tunnel
+start_cloudflared_process
 
-# 2. Création et lancement du Watchdog permanent en arrière-plan
+# 2. Lancement du Watchdog d'auto-rétablissement en arrière-plan
 cat << 'WATCHDOG_SCRIPT' > /tmp/cf_watchdog.sh
 #!/usr/bin/env bash
 
@@ -81,27 +84,34 @@ FAIL_COUNT=0
 while true; do
   sleep 15
   
-  CF_PID=$(cat /tmp/cloudflared_quick.pid 2>/dev/null || true)
+  CF_PID=$(cat /tmp/cloudflared.pid 2>/dev/null || true)
   URL=$(cat /tmp/vm_public_url.txt 2>/dev/null || true)
   
-  NEEDS_RESTART=false
+  NEED_RESTART=false
 
-  # Test 1 : Le processus cloudflared est-il vivant ?
+  # 1. Vérifier si le processus est mort
   if [ -z "$CF_PID" ] || ! ps -p "$CF_PID" > /dev/null 2>&1; then
-    echo "[WATCHDOG $(date +'%T')] Le processus cloudflared s'est arrêté !"
-    NEEDS_RESTART=true
+    echo "[WATCHDOG $(date +'%T')] Processus cloudflared mort !"
+    NEED_RESTART=true
   fi
 
-  # Test 2 : Si le processus est vivant et qu'on a une URL, tester la joignabilité HTTP
-  if [ "$NEEDS_RESTART" = false ] && [ -n "$URL" ]; then
+  # 2. Si le processus est vivant, tester la réponse HTTP de Webtop local
+  if [ "$NEED_RESTART" = false ]; then
+    LOCAL_STATUS=$(curl -s -o /dev/null -I -w "%{http_code}" --max-time 3 http://127.0.0.1:3000 || echo "000")
+    if [ "$LOCAL_STATUS" = "000" ]; then
+      echo "[WATCHDOG $(date +'%T')] Alerte : Webtop local ne répond pas sur le port 3000 !"
+    fi
+  fi
+
+  # 3. Tester l'URL publique Cloudflare
+  if [ "$NEED_RESTART" = false ] && [ -n "$URL" ]; then
     HTTP_CODE=$(curl -s -o /dev/null -I -w "%{http_code}" --max-time 8 "$URL" || echo "000")
-    # Si le code est 502 (Bad Gateway côté tunnel fermé), 504, 530 ou 000 (timeout de connexion)
     if [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "504" ] || [ "$HTTP_CODE" = "530" ] || [ "$HTTP_CODE" = "000" ]; then
       FAIL_COUNT=$(( FAIL_COUNT + 1 ))
-      echo "[WATCHDOG $(date +'%T')] Échec HTTP ($HTTP_CODE) sur $URL (Échec $FAIL_COUNT/3)"
+      echo "[WATCHDOG $(date +'%T')] HTTP $HTTP_CODE sur $URL (Échec $FAIL_COUNT/3)"
       if [ "$FAIL_COUNT" -ge 3 ]; then
-        echo "[WATCHDOG $(date +'%T')] Tunnel mort détecté après 3 échecs consécutifs ! Relance automatique..."
-        NEEDS_RESTART=true
+        echo "[WATCHDOG $(date +'%T')] Tunnel déconnecté (Bad Gateway répété). Auto-rétablissement immédiat !"
+        NEED_RESTART=true
         FAIL_COUNT=0
       fi
     else
@@ -109,18 +119,22 @@ while true; do
     fi
   fi
 
-  if [ "$NEEDS_RESTART" = true ]; then
-    echo "[WATCHDOG $(date +'%T')] Redémarrage immédiat d'un nouveau tunnel..."
+  # 4. Redémarrage si nécessaire
+  if [ "$NEED_RESTART" = true ]; then
+    echo "[WATCHDOG $(date +'%T')] Redémarrage du tunnel en cours..."
     pkill -9 -f cloudflared 2>/dev/null || true
     sleep 2
-    nohup cloudflared tunnel --url http://127.0.0.1:3000 > /tmp/cloudflared_quick.log 2>&1 &
+    rm -f /tmp/cloudflared.log
+
+    nohup cloudflared tunnel       --protocol http2       --edge-ip-version 4       --retries 10       --url http://127.0.0.1:3000 > /tmp/cloudflared.log 2>&1 &
+      
     NEW_PID=$!
-    echo "$NEW_PID" > /tmp/cloudflared_quick.pid
+    echo "$NEW_PID" > /tmp/cloudflared.pid
 
     NEW_URL=""
-    for j in {1..25}; do
+    for j in {1..30}; do
       sleep 2
-      NEW_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/cloudflared_quick.log | head -n1 || true)
+      NEW_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/cloudflared.log | head -n1 || true)
       if [ -n "$NEW_URL" ]; then
         break
       fi
@@ -128,9 +142,9 @@ while true; do
 
     if [ -n "$NEW_URL" ]; then
       echo "$NEW_URL" > /tmp/vm_public_url.txt
-      echo "[WATCHDOG $(date +'%T')] Nouveau tunnel rétabli : $NEW_URL"
+      echo "[WATCHDOG $(date +'%T')] Nouveau tunnel actif : $NEW_URL"
       
-      # Mise à jour sur GitHub
+      # Publication GitHub
       if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ]; then
         TMP_DIR=$(mktemp -d)
         cd "$TMP_DIR"
@@ -146,7 +160,6 @@ while true; do
         git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g' || true
         cd /
         rm -rf "$TMP_DIR"
-        echo "[WATCHDOG $(date +'%T')] URL mise à jour sur GitHub !"
       fi
     fi
     FAIL_COUNT=0
@@ -158,4 +171,4 @@ chmod +x /tmp/cf_watchdog.sh
 nohup /tmp/cf_watchdog.sh > /tmp/cf_watchdog.log 2>&1 &
 WATCHDOG_PID=$!
 echo "$WATCHDOG_PID" > /tmp/cf_watchdog.pid
-echo " Watchdog permanent de tunnel activé (PID: $WATCHDOG_PID). Surveillance continue 24/7."
+echo " Watchdog Cloudflare activé (PID: $WATCHDOG_PID). Rétablissement automatique en cas de Bad Gateway."
