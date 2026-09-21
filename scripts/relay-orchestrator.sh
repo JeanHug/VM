@@ -9,10 +9,10 @@ RELAY_SHUTDOWN_MINS="${RELAY_SHUTDOWN_MINS:-345}"    # 5h45 = 345 minutes
 echo "=================================================="
 echo "    ORCHESTRATEUR DE RELAIS DE LA VM WEB LINUX    "
 echo "=================================================="
-echo "Cycle actuel        : $RELAY_CYCLE"
-echo "Sauvegarde toutes les : $SYNC_INTERVAL_MINS minutes"
-echo "Déclenchement relais : à $RELAY_TRIGGER_MINS minutes (5h15)"
-echo "Arrêt propre        : à $RELAY_SHUTDOWN_MINS minutes (5h45)"
+echo "Cycle actuel          : $RELAY_CYCLE"
+echo "Sauvegarde toutes les   : $SYNC_INTERVAL_MINS minutes"
+echo "Déclenchement relais   : à $RELAY_TRIGGER_MINS minutes (5h15)"
+echo "Arrêt propre          : à $RELAY_SHUTDOWN_MINS minutes (5h45)"
 echo "=================================================="
 
 START_TIME=$(date +%s)
@@ -21,18 +21,25 @@ TRIGGER_TIME=$(( START_TIME + RELAY_TRIGGER_MINS * 60 ))
 SHUTDOWN_TIME=$(( START_TIME + RELAY_SHUTDOWN_MINS * 60 ))
 RELAY_TRIGGERED=false
 
-# Gestion de l'arrêt propre
+# Gestion de l'arrêt propre et nettoyage Cloudflare
 cleanup_and_exit() {
   echo ""
   echo "=== [RELAY HANDOFF] Début de la passation de relais ==="
   echo "1. Sauvegarde delta finale des données..."
   ./scripts/backup-sync.sh backup || true
   
-  echo "2. Arrêt du tunnel Cloudflare de cette instance pour libérer la route..."
+  echo "2. Arrêt du tunnel Cloudflare..."
   if [ -f /tmp/cloudflared.pid ]; then
     PID=$(cat /tmp/cloudflared.pid)
     kill "$PID" 2>/dev/null || true
-    echo "Tunnel Cloudflare arrêté."
+  fi
+
+  # Si un tunnel API nommé avait été créé, on le supprime de Cloudflare
+  if [ -f /tmp/cloudflare_tunnel_id.txt ] && [ -n "$CLOUDFLARE_TOKEN" ] && [ -n "$CLOUDFLARE_ID" ]; then
+    TUNNEL_ID=$(cat /tmp/cloudflare_tunnel_id.txt)
+    echo "Nettoyage du tunnel Cloudflare $TUNNEL_ID..."
+    curl -s -X DELETE "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ID/cfd_tunnel/$TUNNEL_ID" \
+      -H "Authorization: Bearer $CLOUDFLARE_TOKEN" > /dev/null 2>&1 || true
   fi
   
   echo "3. Arrêt du conteneur de bureau..."
@@ -99,6 +106,5 @@ JSON
     cleanup_and_exit
   fi
 
-  # Attente de 30 secondes avant la prochaine itération
   sleep 30
 done
