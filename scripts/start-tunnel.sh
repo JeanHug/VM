@@ -23,7 +23,7 @@ for i in {1..30}; do
   sleep 1
 done
 
-# Lancement du tunnel Cloudflare (HTTP pur vers port 3000)
+# Lancement du tunnel Cloudflare
 echo "Démarrage Cloudflare Tunnel vers http://127.0.0.1:3000..."
 nohup cloudflared tunnel --url http://127.0.0.1:3000 > /tmp/quick_tunnel.log 2>&1 &
 echo $! > /tmp/quick_tunnel.pid
@@ -32,23 +32,36 @@ echo $! > /tmp/quick_tunnel.pid
 nohup ssh -o StrictHostKeyChecking=no -R 80:127.0.0.1:3000 nokey@localhost.run > /tmp/localhost_run.log 2>&1 &
 echo $! > /tmp/localhost_run.pid
 
-FOUND_CF_URL=""
+RAW_CF_URL=""
 for i in {1..40}; do
   sleep 2
-  FOUND_CF_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/quick_tunnel.log | head -n1 || true)
-  if [ -n "$FOUND_CF_URL" ]; then
+  RAW_CF_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/quick_tunnel.log | head -n1 || true)
+  if [ -n "$RAW_CF_URL" ]; then
     break
   fi
 done
 
-FOUND_LHR_URL=""
+RAW_LHR_URL=""
 for i in {1..15}; do
-  FOUND_LHR_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.lhr\.life' /tmp/localhost_run.log | head -n1 || true)
-  if [ -n "$FOUND_LHR_URL" ]; then
+  RAW_LHR_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.lhr\.life' /tmp/localhost_run.log | head -n1 || true)
+  if [ -n "$RAW_LHR_URL" ]; then
     break
   fi
   sleep 1
 done
+
+# On ajoute autoconnect=true&resize=remote pour connexion directe immédiate
+PARAMS="vnc.html?autoconnect=true&resize=remote"
+FOUND_CF_URL=""
+FOUND_LHR_URL=""
+
+if [ -n "$RAW_CF_URL" ]; then
+  FOUND_CF_URL="$RAW_CF_URL/$PARAMS"
+fi
+
+if [ -n "$RAW_LHR_URL" ]; then
+  FOUND_LHR_URL="$RAW_LHR_URL/$PARAMS"
+fi
 
 PRIMARY_URL="$FOUND_CF_URL"
 if [ -z "$PRIMARY_URL" ]; then
@@ -82,7 +95,7 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; t
 JSON
 
   git add current_url.txt updated_at.txt tunnels.json
-  git commit -m "chore(tunnel): active public tunnels [$PRIMARY_URL]" || true
+  git commit -m "chore(tunnel): active public tunnels with autoconnect [$PRIMARY_URL]" || true
   git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g' || true
   cd /
   rm -rf "$TMP_URL_REPO"
