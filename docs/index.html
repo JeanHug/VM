@@ -3,53 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Accès Bureau Virtuel Linux</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Portail Virtuel Cloud • Ubuntu & Android</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z'/></svg>">
   <style>
     :root {
-      --bg: #ffffff;
-      --card-bg: #ffffff;
-      --border: #e2e8f0;
-      --border-focus: #2563eb;
-      --text: #0f172a;
-      --text-muted: #64748b;
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
-      --success: #16a34a;
-      --warning: #ea580c;
-      --danger: #dc2626;
-      --radius: 12px;
+      --android-green: #10b981;
+      --android-hover: #059669;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 16px;
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     body {
       background-color: var(--bg);
       color: var(--text);
-      min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
+      min-height: 100vh;
       padding: 24px;
-      -webkit-font-smoothing: antialiased;
     }
 
     .container {
-      width: 100%;
-      max-width: 480px;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 36px 32px;
-      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06);
+      width: 100%;
+      max-width: 580px;
+      padding: 36px;
+      transition: all 0.3s ease;
     }
 
     .header {
@@ -57,33 +55,50 @@
       margin-bottom: 28px;
     }
 
+    .logo-icons {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
     .logo-icon {
       width: 52px;
       height: 52px;
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      border-radius: 12px;
-      display: inline-flex;
+      border-radius: 14px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .logo-ubuntu {
+      background: #eff6ff;
       color: var(--primary);
     }
 
-    h1 {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 6px;
+    .logo-android {
+      background: #ecfdf5;
+      color: var(--android-green);
     }
 
-    p.subtitle {
-      font-size: 14px;
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
       color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 6px;
     }
 
     .form-group {
       margin-bottom: 20px;
+      text-align: left;
     }
 
     label {
@@ -94,51 +109,55 @@
       color: var(--text);
     }
 
-    .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    input[type="password"], input[type="text"] {
+    .input-wrapper input {
       width: 100%;
-      padding: 12px 14px;
-      font-size: 16px;
+      padding: 13px 16px;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
+      font-size: 15px;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: all 0.2s ease;
     }
 
-    input:focus {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    .input-wrapper input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
     }
 
     .btn {
       width: 100%;
-      padding: 13px 20px;
+      padding: 14px 20px;
+      border-radius: 10px;
       font-size: 15px;
       font-weight: 600;
-      border-radius: 8px;
-      border: none;
       cursor: pointer;
-      display: inline-flex;
+      border: none;
+      transition: all 0.2s ease;
+      display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: all 0.2s;
       text-decoration: none;
     }
 
     .btn-primary {
       background-color: var(--primary);
-      color: #ffffff;
+      color: white;
     }
 
     .btn-primary:hover {
       background-color: var(--primary-hover);
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-android {
+      background-color: var(--android-green);
+      color: white;
+    }
+
+    .btn-android:hover {
+      background-color: var(--android-hover);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
     }
 
     .btn-secondary {
@@ -168,7 +187,7 @@
 
     .status-panel {
       display: none;
-      margin-top: 24px;
+      margin-top: 20px;
       border-top: 1px solid var(--border);
       padding-top: 20px;
     }
@@ -179,9 +198,9 @@
       gap: 6px;
       font-size: 12px;
       font-weight: 600;
-      padding: 4px 10px;
+      padding: 5px 12px;
       border-radius: 20px;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
 
     .badge-online {
@@ -203,17 +222,73 @@
       background: currentColor;
     }
 
+    /* Grille de sélection des VM */
+    .vm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 500px) {
+      .vm-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .vm-card {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 16px;
+      text-align: center;
+      background: #ffffff;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .vm-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transform: translateY(-2px);
+    }
+
+    .vm-card.android:hover {
+      border-color: var(--android-green);
+    }
+
+    .vm-card-icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .vm-card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .vm-card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
     .url-box {
       background: #f8fafc;
       border: 1px solid var(--border);
-      padding: 12px 14px;
+      padding: 10px 12px;
       border-radius: 8px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
       word-break: break-all;
       margin-bottom: 16px;
-      color: #1e293b;
-      font-weight: 500;
+      color: #334155;
+      text-align: center;
     }
 
     .footer-note {
@@ -238,15 +313,23 @@
 
   <div class="container" id="mainContainer">
     <div class="header">
-      <div class="logo-icon">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-          <line x1="8" y1="21" x2="16" y2="21"></line>
-          <line x1="12" y1="17" x2="12" y2="21"></line>
-        </svg>
+      <div class="logo-icons">
+        <div class="logo-icon logo-ubuntu">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <div class="logo-icon logo-android">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+        </div>
       </div>
-      <h1>Bureau Virtuel Ubuntu</h1>
-      <p class="subtitle">Accès sécurisé à votre environnement persistant</p>
+      <h1>Portail Virtuel Cloud</h1>
+      <p class="subtitle">Sélectionnez votre environnement (Ubuntu Linux ou Android 13)</p>
     </div>
 
     <!-- Écran de connexion -->
@@ -265,30 +348,48 @@
       <div class="alert alert-error" id="errorAlert"></div>
     </div>
 
-    <!-- Écran de connexion réussie & lancement VM -->
+    <!-- Écran de sélection des VM (Ubuntu vs Android) -->
     <div id="statusSection" class="status-panel">
-      <div id="badgeContainer">
+      <div style="text-align: center;">
         <span class="badge badge-online" id="statusBadge">
           <span class="dot"></span> En ligne (.lhr.life)
         </span>
       </div>
 
-      <div class="form-group">
-        <label>Lien direct d'accès :</label>
-        <div class="url-box" id="tunnelUrlBox">Récupération de l'adresse...</div>
+      <div class="vm-grid">
+        <!-- Carte 1 : Bureau Ubuntu -->
+        <div class="vm-card">
+          <div class="vm-card-icon">🖥️</div>
+          <div class="vm-card-title">Bureau Ubuntu</div>
+          <div class="vm-card-desc">Google Chrome, Google Docs, Suite complète XFCE</div>
+          <a id="btnDesktop" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="padding: 10px 14px; font-size: 13px;">
+            Lancer Ubuntu
+          </a>
+        </div>
+
+        <!-- Carte 2 : Smartphone Android 13 -->
+        <div class="vm-card android">
+          <div class="vm-card-icon">📱</div>
+          <div class="vm-card-title">Android 13</div>
+          <div class="vm-card-desc">Instance Android récente, tactile fluide et applications</div>
+          <a id="btnAndroid" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-android" style="padding: 10px 14px; font-size: 13px;">
+            Lancer Android
+          </a>
+        </div>
       </div>
 
-      <a id="launchBtn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="margin-bottom: 8px;">
-        🚀 Accéder au Bureau Virtuel
-      </a>
+      <div class="form-group">
+        <label>URL Racine du Serveur :</label>
+        <div class="url-box" id="tunnelUrlBox">Récupération de l'adresse...</div>
+      </div>
       
       <button type="button" class="btn btn-secondary" onclick="copyUrl()">
-        📋 Copier l'adresse directe
+        📋 Copier l'adresse de session
       </button>
     </div>
 
     <div class="footer-note">
-      Tunnel direct SSH localhost.run & Persistance 100%
+      Double VM persistante (Ubuntu + Android 13) • Relais continu
     </div>
   </div>
 
@@ -314,10 +415,9 @@
       btn.disabled = true;
 
       const hash = await sha256(pwd);
-
       if (hash === AUTH_HASH || pwd === "1234") {
         sessionStorage.setItem("vm_auth", "true");
-        await fetchAndDisplayTunnel(true);
+        await fetchAndDisplayTunnel(false);
       } else {
         err.textContent = "Mot de passe incorrect.";
         err.style.display = "block";
@@ -327,7 +427,6 @@
     }
 
     async function fetchTunnelData() {
-      // 1. Essai direct via Raw GitHub avec cache-buster
       try {
         const res = await fetch(`${RAW_URL}?_t=${Date.now()}`);
         if (res.ok) {
@@ -337,7 +436,6 @@
         console.warn("Raw fetch failed, trying API fallback", e);
       }
 
-      // 2. Repli sur l'API GitHub Contents
       try {
         const res = await fetch(`${API_URL}&_t=${Date.now()}`);
         if (res.ok) {
@@ -350,7 +448,6 @@
       } catch (e) {
         console.error("API fetch failed", e);
       }
-
       return null;
     }
 
@@ -358,16 +455,15 @@
       const authSection = document.getElementById("authSection");
       const statusSection = document.getElementById("statusSection");
       const urlBox = document.getElementById("tunnelUrlBox");
-      const launchBtn = document.getElementById("launchBtn");
+      const btnDesktop = document.getElementById("btnDesktop");
+      const btnAndroid = document.getElementById("btnAndroid");
       const badge = document.getElementById("statusBadge");
 
       authSection.style.display = "none";
       statusSection.style.display = "block";
 
       const data = await fetchTunnelData();
-
       if (data) {
-        // Extraction stricte et prioritaire du lien .lhr.life
         let lhr = "";
         if (data.lhrLife && data.lhrLife.includes(".lhr.life")) {
           lhr = data.lhrLife;
@@ -381,16 +477,17 @@
         }
 
         activeTunnelUrl = lhr || data.primary || data.cloudflare || "";
-
         if (activeTunnelUrl) {
-          urlBox.textContent = activeTunnelUrl;
-          launchBtn.href = activeTunnelUrl;
-          badge.className = "badge badge-online";
-          badge.innerHTML = '<span class="dot"></span> En ligne (.lhr.life actif)';
+          const cleanUrl = activeTunnelUrl.replace(/\/+$/, "");
+          urlBox.textContent = cleanUrl;
+          
+          // Lien Ubuntu Desktop (Racine /)
+          btnDesktop.href = cleanUrl;
+          // Lien Android (/android/)
+          btnAndroid.href = `${cleanUrl}/android/`;
 
-          if (autoOpen && activeTunnelUrl) {
-            window.open(activeTunnelUrl, '_blank', 'noopener,noreferrer');
-          }
+          badge.className = "badge badge-online";
+          badge.innerHTML = '<span class="dot"></span> En ligne (Ubuntu & Android)';
           return;
         }
       }
@@ -408,7 +505,6 @@
       });
     }
 
-    // Auto-login si déjà authentifié dans la session
     if (sessionStorage.getItem("vm_auth") === "true") {
       fetchAndDisplayTunnel(false);
     }
