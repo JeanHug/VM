@@ -20,7 +20,7 @@ TMP_REPO=$(mktemp -d)
 case "$ACTION" in
   restore)
     echo "=================================================="
-    echo "   RESTAURATION DES DONNÉES ANDROID 13 (PERSISTANCE) "
+    echo "   RESTAURATION DES DONNÉES ANDROID 14 (PERSISTANCE) "
     echo "=================================================="
     cd "$TMP_REPO"
     git init -q
@@ -31,16 +31,16 @@ case "$ACTION" in
     if git fetch origin "$BRANCH" --depth=1 2>/dev/null; then
       git checkout -B "$BRANCH" origin/"$BRANCH"
       if [ -f "$ARCHIVE_NAME" ]; then
-        echo " Archive persistante trouvée. Décompression..."
+        echo " Archive persistante trouvée. Décompression des applications & sessions..."
         sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -y -qq zstd tar >/dev/null 2>&1 || true
         sudo tar -I zstd -xf "$ARCHIVE_NAME" -C "$DATA_DIR" 2>/dev/null || true
         sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
-        echo " Données Android 13 restaurées avec succès !"
+        echo " Données Android 14 restaurées avec succès !"
       else
         echo "ℹ️ Aucune archive $ARCHIVE_NAME sur la branche $BRANCH (première session)."
       fi
     else
-      echo "ℹ️ Branche $BRANCH inexistante. Initialisation d'une nouvelle session Android."
+      echo "ℹ️ Branche $BRANCH inexistante. Initialisation d'une nouvelle session Android 14."
     fi
     cd /
     rm -rf "$TMP_REPO"
@@ -48,10 +48,10 @@ case "$ACTION" in
 
   backup)
     echo "=================================================="
-    echo "   SAUVEGARDE DES DONNÉES ANDROID 13 (PERSISTANCE)   "
+    echo "   SAUVEGARDE DES DONNÉES ANDROID 14 (PERSISTANCE)   "
     echo "=================================================="
     if [ ! -d "$DATA_DIR" ] || [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
-      echo "ℹ️ Aucun fichier à sauvegarder pour Android."
+      echo "ℹ️ Aucun fichier à sauvegarder pour Android 14."
       exit 0
     fi
 
@@ -82,9 +82,9 @@ case "$ACTION" in
     if ! git diff --staged --quiet; then
       git commit -m "chore(android-data): backup [$(date -u +'%Y-%m-%d %H:%M:%S UTC')]"
       git push --force origin "$BRANCH" 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g'
-      echo " Données Android 13 synchronisées et sécurisées !"
+      echo " Données Android 14 synchronisées et sécurisées !"
     else
-      echo "ℹ️ Aucun changement dans les données Android."
+      echo "ℹ️ Aucun changement dans les données Android 14."
     fi
     cd /
     rm -rf "$TMP_REPO"
