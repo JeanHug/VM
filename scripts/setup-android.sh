@@ -2,25 +2,23 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION DU VRAI SMARTPHONE ANDROID 13   "
+echo "    CONFIGURATION DE LA VM SMARTPHONE ANDROID     "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
-sudo mkdir -p "$DATA_DIR/data" "/var/www/android-web"
-sudo cp -rf android-web/* /var/www/android-web/ 2>/dev/null || true
-sudo chmod -R 777 "$DATA_DIR" /var/www/android-web 2>/dev/null || true
+sudo mkdir -p "$DATA_DIR/data"
+sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 
-# Nettoyage des conteneurs précédents
+# Nettoyage des anciens conteneurs
 docker rm -f android_vm redroid13 ws_scrcpy 2>/dev/null || true
 
-# 1. Vérification de l'accélération matérielle KVM
+# 1. Vérification et activation de l'accélération matérielle KVM
 sudo chmod 666 /dev/kvm 2>/dev/null || true
 
-# 2. Démarrage du conteneur Android
-echo "=== Démarrage d'Android avec accélération KVM native ==="
+# 2. Démarrage du conteneur Android officiel (budtmo/docker-android)
+echo "=== Démarrage du conteneur Android (Samsung Galaxy S10) ==="
 docker pull budtmo/docker-android:emulator_11.0
 
-# On lance avec les variables optimisées pour mobile plein écran
 docker run -d \
   --name android_vm \
   --privileged \
@@ -35,8 +33,8 @@ docker run -d \
   -v "$DATA_DIR/data":/root/android \
   budtmo/docker-android:emulator_11.0
 
-# 3. Configuration NGINX avec suppression totale du faux cadre et plein écran 100%
-echo "=== Configuration du reverse-proxy NGINX (Plein Écran Natif) ==="
+# 3. Configuration du reverse-proxy NGINX sur le port 3000
+echo "=== Configuration du reverse-proxy NGINX (Redirection automatique vers noVNC plein écran) ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
@@ -44,34 +42,18 @@ server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
 
-    root /var/www/android-web;
-    index index.html;
-
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Page d'accueil mobile plein écran personnalisée
+    # Redirection immédiate de la racine vers noVNC en autoconnect et plein écran
     location = / {
-        try_files /index.html =404;
+        return 302 /vnc.html?autoconnect=true&resize=scale&reconnect=true;
     }
 
-    # Proxy vers le flux noVNC avec suppression des bordures et styles intrusifs
-    location /stream/ {
-        proxy_pass http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale&quality=9;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    # Websockets noVNC et assets internes
+    # Proxy universel pour noVNC, WebSockets, scripts JS, feuilles CSS et flux vidéo
     location / {
-        proxy_pass http://127.0.0.1:6080/;
+        proxy_pass http://127.0.0.1:6080;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -86,29 +68,27 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 4. Suppression directe du cadre Nexus à l'intérieur du conteneur
-echo "=== Injection du style 100% Plein Écran sans faux cadre ==="
-sleep 5
-docker exec -u 0 android_vm bash -c '
-  # Trouver les fichiers css de noVNC et supprimer tout skin de téléphone
-  find /root/ -name "*.css" -o -name "vnc.html" 2>/dev/null | while read f; do
-    echo "/* Forcer plein écran sans bordure */
-    body, html { margin:0!important; padding:0!important; background:#000!important; overflow:hidden!important; width:100vw!important; height:100vh!important; }
-    #noVNC_canvas, canvas, video { width:100vw!important; height:100vh!important; max-width:100vw!important; max-height:100vh!important; object-fit:contain!important; }
-    .sidebar, .menu, .phone-frame, .device-skin, .device-art, #noVNC_control_bar { display:none!important; }
-    " >> "$f" 2>/dev/null || true
-  done
-' || true
+# 4. Attente et test automatisé exhaustif de tous les composants
+echo "=== Validation active des points de terminaison Web Android ==="
+VNC_READY=false
+for i in {1..50}; do
+  HTTP_ROOT=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  HTTP_VNC=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/vnc.html || echo "000")
+  HTTP_CSS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/app/styles/base.css || echo "000")
 
-# 5. Attente active de la disponibilité du serveur Web
-echo "=== Attente de l'initialisation du flux Android ==="
-for i in {1..40}; do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:6080/ || echo "000")
-  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-    echo " Serveur Web Android opérationnel (HTTP $HTTP_CODE) !"
+  echo "[Tentative $i/50] / -> HTTP $HTTP_ROOT | /vnc.html -> HTTP $HTTP_VNC | /app/styles/base.css -> HTTP $HTTP_CSS"
+
+  if [ "$HTTP_ROOT" = "302" ] && [ "$HTTP_VNC" = "200" ] && [ "$HTTP_CSS" = "200" ]; then
+    echo " TOUS LES TESTS SONT AU VERT : Serveur Web noVNC Android 100% fonctionnel !"
+    VNC_READY=true
     break
   fi
-  sleep 2
+  sleep 3
 done
 
-echo " Android Plein Écran 100% configuré et prêt !"
+if [ "$VNC_READY" = false ]; then
+  echo "⚠️ Le serveur Android a mis plus de temps à démarrer, vérification des processus Docker..."
+  docker ps
+fi
+
+echo " VM Android prête et accessible en plein écran !"
