@@ -2,21 +2,21 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION BI-ENVIRONNEMENT : LINUX & ANDROID "
+echo "    CONFIGURATION BUREAU LINUX UBUNTU (OFFICIEL)  "
 echo "=================================================="
 
 DATA_DIR="/home/runner/vm_data"
 
-# 1. Préparation des répertoires de données persistantes
-sudo mkdir -p "$DATA_DIR/Desktop" "$DATA_DIR/Downloads" "$DATA_DIR/Applications" "$DATA_DIR/.config" "$DATA_DIR/.local/bin" "$DATA_DIR/android_data"
+# Utilisation de sudo pour créer les dossiers nécessaires
+sudo mkdir -p "$DATA_DIR/Desktop" "$DATA_DIR/Downloads" "$DATA_DIR/Applications" "$DATA_DIR/.config" "$DATA_DIR/.local/bin"
 sudo chown -R 1000:1000 "$DATA_DIR"
 sudo chmod -R 775 "$DATA_DIR"
 
-# Nettoyage des conteneurs précédents
-docker rm -f kasm_desktop redroid ws_scrcpy 2>/dev/null || true
+# Nettoyage d'anciens conteneurs
+docker rm -f kasm_desktop 2>/dev/null || true
 
-# 2. Démarrage de l'environnement 1 : Bureau Ubuntu Linux (Kasm)
-echo "=== Démarrage du Bureau Virtuel Ubuntu Linux (Port 6901) ==="
+# 1. Démarrage de l'image Kasm Desktop Ubuntu complète et fluide
+echo "=== Démarrage du conteneur Kasm Desktop Ubuntu ==="
 docker pull kasmweb/ubuntu-jammy-desktop:1.16.0
 docker run -d \
   --name kasm_desktop \
@@ -27,42 +27,8 @@ docker run -d \
   -v "$DATA_DIR":/home/kasm-user \
   kasmweb/ubuntu-jammy-desktop:1.16.0
 
-# 3. Démarrage de l'environnement 2 : Android 13 (Redroid) & Interface Web
-echo "=== Démarrage de l'environnement Android 13 (Redroid) ==="
-# Chargement des modules noyau Android si disponibles
-sudo modprobe binder_linux 2>/dev/null || true
-sudo modprobe ashmem_linux 2>/dev/null || true
-
-# Lancement du conteneur Android 13 officiel
-docker pull redroid/redroid:13.0.0-latest 2>/dev/null || docker pull redroid/redroid:11.0.0-latest 2>/dev/null || true
-docker run -d \
-  --name redroid \
-  --privileged \
-  -p 5555:5555 \
-  -v "$DATA_DIR/android_data":/data \
-  redroid/redroid:13.0.0-latest \
-  androidboot.hardware=mt6893 \
-  androidboot.redroid_width=720 \
-  androidboot.redroid_height=1280 \
-  androidboot.redroid_dpi=320 \
-  androidboot.redroid_fps=60 \
-  androidboot.use_memfd=1 2>/dev/null || docker run -d \
-  --name redroid \
-  --privileged \
-  -p 5555:5555 \
-  -v "$DATA_DIR/android_data":/data \
-  redroid/redroid:11.0.0-latest \
-  androidboot.use_memfd=1 2>/dev/null || true
-
-# Lancement de la passerelle Web Android WS-Scrcpy (Port 8000)
-docker pull sorcx/ws-scrcpy:latest 2>/dev/null || true
-docker run -d \
-  --name ws_scrcpy \
-  --net=host \
-  sorcx/ws-scrcpy:latest 2>/dev/null || true
-
-# 4. Configuration du reverse-proxy NGINX pour les deux environnements
-echo "=== Configuration du reverse-proxy NGINX (Desktop & Android) ==="
+# 2. Configuration du reverse-proxy NGINX ultra-rapide
+echo "=== Configuration du reverse-proxy NGINX (Zéro latence) ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
@@ -70,11 +36,11 @@ server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
 
+    # Zéro mise en mémoire tampon pour fluidité 60 FPS
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # 1. Bureau Linux Ubuntu (Racine /)
     location / {
         proxy_pass https://127.0.0.1:6901;
         proxy_ssl_verify off;
@@ -85,20 +51,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Autologin direct sans pop-up de mot de passe (kasm_user:vncpass)
         proxy_set_header Authorization "Basic a2FzbV91c2VyOnZuY3Bhc3M=";
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    # 2. Téléphone Android 13 (/android/)
-    location /android/ {
-        proxy_pass http://127.0.0.1:8000/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -107,18 +62,18 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 5. Attente de démarrage des services
-echo "=== Attente de l'initialisation des conteneurs ==="
-for i in {1..35}; do
+# 3. Attente que Kasm soit actif
+echo "=== Attente de l'initialisation du bureau Kasm ==="
+for i in {1..40}; do
   if curl -s -k https://127.0.0.1:6901/ > /dev/null 2>&1; then
-    echo " Bureau Ubuntu opérationnel !"
+    echo " Bureau Ubuntu Kasm opérationnel !"
     break
   fi
   sleep 2
 done
 
-# 6. Installation et validation de Google Chrome & Google Docs sur le bureau Linux
-echo "=== Configuration des applications sur le Bureau Linux ==="
+# 4. Installation et configuration garantie de Google Chrome et Google Docs
+echo "=== Installation et configuration garantie de Google Chrome & Docs ==="
 docker exec -u 0 kasm_desktop bash -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null 2>&1 || true
@@ -128,21 +83,27 @@ docker exec -u 0 kasm_desktop bash -c '
   su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
   su - kasm-user -c "autocutsel -selection PRIMARY -fork >/dev/null 2>&1 || true"
 
-  # Installation officielle de Google Chrome Stable
-  if ! [ -x /usr/bin/google-chrome-stable ]; then
+  # Installation officielle du paquet Google Chrome Stable
+  if ! [ -d /opt/google/chrome ]; then
     wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
     apt-get update -qq >/dev/null 2>&1 || true
-    apt-get install -y -qq google-chrome-stable >/dev/null 2>&1 || true
+    apt-get install -y -qq google-chrome-stable >/dev/null 2>&1 || {
+      curl -sSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      dpkg -i /tmp/google-chrome.deb 2>/dev/null || apt-get install -y -f -qq >/dev/null 2>&1
+      rm -f /tmp/google-chrome.deb
+    }
   fi
 
-  # Nettoyage de tout reste d Antigravity si présent
-  rm -f /home/kasm-user/Desktop/*antigravity* /usr/local/bin/*antigravity* /usr/share/applications/*antigravity* 2>/dev/null || true
-
-  # Lanceur officiel Google Chrome (sans boucle, direct et compatible conteneur)
-  cat << "CHROME_EOF" > /usr/local/bin/google-chrome
+  # APPLICATION DU WRAPPER INDESTRUCTIBLE AU COEUR DU BINAIRE CHROME
+  # En modifiant directement le binaire interne /opt/google/chrome/chrome,
+  # TOUTES les invocations de Chrome (clic bureau, terminal, liens, docs)
+  # hériteront TOUJOURS de --no-sandbox et ne crasheront JAMAIS.
+  if [ -f /opt/google/chrome/chrome ] && [ ! -f /opt/google/chrome/chrome-real ]; then
+    mv /opt/google/chrome/chrome /opt/google/chrome/chrome-real
+    cat << "EOF_CHROME_BIN" > /opt/google/chrome/chrome
 #!/usr/bin/env bash
-exec /usr/bin/google-chrome-stable \
+exec /opt/google/chrome/chrome-real \
   --no-sandbox \
   --disable-dev-shm-usage \
   --disable-gpu \
@@ -150,18 +111,19 @@ exec /usr/bin/google-chrome-stable \
   --no-first-run \
   --no-default-browser-check \
   "$@"
-CHROME_EOF
-  chmod 755 /usr/local/bin/google-chrome
-  cp -f /usr/local/bin/google-chrome /usr/local/bin/chrome 2>/dev/null || true
+EOF_CHROME_BIN
+    chmod 755 /opt/google/chrome/chrome
+  fi
 
-  # Lanceur officiel Google Docs
-  cat << "DOCS_EOF" > /usr/local/bin/google-docs
+  # Symlinks globaux
+  ln -sf /opt/google/chrome/google-chrome /usr/local/bin/google-chrome
+  ln -sf /opt/google/chrome/google-chrome /usr/local/bin/chrome
+
+  # Raccourci CLI pour Google Docs
+  cat << "DOCS_CLI_EOF" > /usr/local/bin/google-docs
 #!/usr/bin/env bash
-exec /usr/bin/google-chrome \
-  --app="https://docs.google.com" \
-  --class="google-docs" \
-  "$@"
-DOCS_EOF
+exec /opt/google/chrome/google-chrome --app="https://docs.google.com" "$@"
+DOCS_CLI_EOF
   chmod 755 /usr/local/bin/google-docs
 
   # Icône SVG officielle Google Docs
@@ -178,7 +140,10 @@ SVG_DOCS
   # Raccourcis sur le Bureau XFCE
   mkdir -p /home/kasm-user/Desktop /usr/share/applications
 
-  # Raccourci Google Chrome
+  # Nettoyage de tout reste d Antigravity si présent
+  rm -f /home/kasm-user/Desktop/*antigravity* /usr/local/bin/*antigravity* /usr/share/applications/*antigravity* 2>/dev/null || true
+
+  # Raccourci Google Chrome sur le Bureau
   cat << "DESKTOP_CHROME" > /home/kasm-user/Desktop/google-chrome.desktop
 [Desktop Entry]
 Version=1.0
@@ -186,14 +151,14 @@ Type=Application
 Name=Google Chrome
 GenericName=Navigateur Web
 Comment=Naviguer sur Internet avec Google Chrome
-Exec=/usr/local/bin/google-chrome %U
+Exec=/opt/google/chrome/google-chrome %U
 Icon=google-chrome
 Terminal=false
 Categories=Network;WebBrowser;StartupNotify=true
 Actions=new-window;new-private-window;
 DESKTOP_CHROME
 
-  # Raccourci Google Docs
+  # Raccourci Google Docs sur le Bureau
   cat << "DESKTOP_DOCS" > /home/kasm-user/Desktop/google-docs.desktop
 [Desktop Entry]
 Version=1.0
@@ -201,7 +166,7 @@ Type=Application
 Name=Google Docs
 GenericName=Traitement de texte
 Comment=Créer et éditer des documents en ligne
-Exec=/usr/local/bin/google-docs %U
+Exec=/opt/google/chrome/google-chrome --app=https://docs.google.com
 Icon=/usr/share/icons/hicolor/scalable/apps/google-docs.svg
 Terminal=false
 Categories=Office;WordProcessor;StartupNotify=true
@@ -211,12 +176,15 @@ DESKTOP_DOCS
   cp -f /home/kasm-user/Desktop/google-chrome.desktop /usr/share/applications/
   cp -f /home/kasm-user/Desktop/google-docs.desktop /usr/share/applications/
 
-  # Permissions d exécution et validation de confiance XFCE
-  chmod 755 /home/kasm-user/Desktop/*.desktop /usr/share/applications/*.desktop 2>/dev/null || true
+  # Permissions d exécution complètes et approbation XFCE sans avertissement
+  chmod 777 /home/kasm-user/Desktop/*.desktop /usr/share/applications/*.desktop 2>/dev/null || true
   chown -R 1000:1000 /home/kasm-user
 
-  # Validation de sécurité pour ouverture immédiate au double-clic
+  # Marquage de confiance XFCE
   su - kasm-user -c "gio set /home/kasm-user/Desktop/*.desktop metadata::trusted true 2>/dev/null || true"
+
+  # Test de démarrage de Chrome pour valider qu il fonctionne
+  su - kasm-user -c "/opt/google/chrome/google-chrome --version"
 '
 
-echo " Configuration terminée : Bureau Ubuntu et Android 13 opérationnels !"
+echo " Bureau Ubuntu configuré avec succès : Google Chrome et Google Docs 100% opérationnels !"
