@@ -16,7 +16,7 @@ fi
 pkill -f cloudflared || true
 pkill -f "nokey@localhost.run" || true
 
-# 2. Lancement du tunnel Cloudflare (Port 3000 -> Android)
+# 2. Lancement du tunnel Cloudflare (Port 3000 -> Android Web)
 echo "Lancement du Quick Tunnel Cloudflare pour Android..."
 cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate > /tmp/quick_tunnel_android.log 2>&1 &
 
@@ -26,7 +26,7 @@ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveIn
 
 # 4. Récupération des URLs
 RAW_CF_URL=""
-for i in {1..35}; do
+for i in {1..40}; do
   RAW_CF_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/quick_tunnel_android.log | head -n1 || true)
   if [ -n "$RAW_CF_URL" ]; then
     break
@@ -67,7 +67,7 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; t
 
   cat << JSON > tunnels-android.json
 {
-  "name": "Smartphone Android 13",
+  "name": "Smartphone Android",
   "primary": "$PRIMARY_URL",
   "cloudflare": "$RAW_CF_URL",
   "lhrLife": "$RAW_LHR_URL",
