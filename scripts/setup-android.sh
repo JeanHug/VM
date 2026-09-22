@@ -2,55 +2,39 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION DE LA VM SMARTPHONE ANDROID 13   "
+echo "    CONFIGURATION DE LA VM SMARTPHONE ANDROID     "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
 
-# Utilisation de sudo pour créer les dossiers
+# Utilisation de sudo pour créer les dossiers nécessaires
 sudo mkdir -p "$DATA_DIR/data"
-sudo chown -R 1000:1000 "$DATA_DIR"
-sudo chmod -R 775 "$DATA_DIR"
+sudo chown -R 1000:1000 "$DATA_DIR" 2>/dev/null || true
+sudo chmod -R 775 "$DATA_DIR" 2>/dev/null || true
 
 # Nettoyage des conteneurs précédents
-docker rm -f redroid ws_scrcpy 2>/dev/null || true
+docker rm -f android_vm redroid ws_scrcpy 2>/dev/null || true
 
-# 1. Chargement des modules noyau Android si disponibles
-sudo modprobe binder_linux 2>/dev/null || true
-sudo modprobe ashmem_linux 2>/dev/null || true
+# 1. Vérification et activation de l'accélération KVM
+sudo chmod 666 /dev/kvm 2>/dev/null || true
 
-# 2. Démarrage de Redroid Android 13
-echo "=== Téléchargement et lancement de Redroid Android 13 ==="
-docker pull redroid/redroid:13.0.0-latest 2>/dev/null || docker pull redroid/redroid:11.0.0-latest 2>/dev/null || true
+# 2. Démarrage de la VM Android avec Web noVNC intégré
+echo "=== Démarrage de l'émulateur Android (budtmo/docker-android) ==="
+docker pull budtmo/docker-android:emulator_11.0
 
 docker run -d \
-  --name redroid \
+  --name android_vm \
   --privileged \
+  --device /dev/kvm \
+  -p 6080:6080 \
+  -p 5554:5554 \
   -p 5555:5555 \
-  -v "$DATA_DIR/data":/data \
-  redroid/redroid:13.0.0-latest \
-  androidboot.hardware=mt6893 \
-  androidboot.redroid_width=720 \
-  androidboot.redroid_height=1280 \
-  androidboot.redroid_dpi=320 \
-  androidboot.redroid_fps=60 \
-  androidboot.use_memfd=1 2>/dev/null || docker run -d \
-  --name redroid \
-  --privileged \
-  -p 5555:5555 \
-  -v "$DATA_DIR/data":/data \
-  redroid/redroid:11.0.0-latest \
-  androidboot.use_memfd=1 2>/dev/null || true
+  -e DEVICE="Samsung Galaxy S10" \
+  -e WEB_VNC=true \
+  -e WEB_PORT=6080 \
+  budtmo/docker-android:emulator_11.0
 
-# 3. Lancement de la passerelle Web WS-Scrcpy (Port 8000)
-echo "=== Démarrage de l'interface tactile Web Android ==="
-docker pull sorcx/ws-scrcpy:latest 2>/dev/null || true
-docker run -d \
-  --name ws_scrcpy \
-  --net=host \
-  sorcx/ws-scrcpy:latest 2>/dev/null || true
-
-# 4. Configuration de NGINX sur le port 3000 vers le Web Android (Port 8000)
+# 3. Configuration du reverse-proxy NGINX sur le port 3000 vers noVNC (Port 6080)
 echo "=== Configuration du reverse-proxy NGINX pour Android ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
@@ -64,7 +48,7 @@ server {
     tcp_nodelay on;
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:6080;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -79,14 +63,22 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 5. Attente que le service Android soit prêt
-echo "=== Attente de l'initialisation de l'instance Android ==="
-for i in {1..30}; do
-  if curl -s http://127.0.0.1:8000/ > /dev/null 2>&1 || curl -s http://127.0.0.1:3000/ > /dev/null 2>&1; then
-    echo " Instance Android 13 opérationnelle !"
+# 4. Boucle de validation active de l'accès Web Android
+echo "=== Validation active du serveur Web Android ==="
+ANDROID_READY=false
+for i in {1..45}; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:6080/ || echo "000")
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+    echo " Serveur Web Android opérationnel (HTTP $HTTP_CODE) !"
+    ANDROID_READY=true
     break
   fi
-  sleep 2
+  echo "En attente du démarrage Web Android... ($i/45 - HTTP $HTTP_CODE)"
+  sleep 3
 done
 
-echo " VM Android 13 prête et accessible !"
+if [ "$ANDROID_READY" = false ]; then
+  echo "⚠️ Avertissement : Le serveur Web Android prend plus de temps à s'initialiser."
+fi
+
+echo " VM Android prête et accessible !"
