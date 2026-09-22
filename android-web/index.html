@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#000000">
-  <title>Smartphone Android 13 • Plein Écran</title>
+  <meta name="theme-color" content="#09090b">
+  <title>Smartphone Android 13 • Natif 60 FPS</title>
   <style>
     * {
       box-sizing: border-box;
@@ -28,25 +28,24 @@
       align-items: center;
       justify-content: center;
       touch-action: none;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     }
 
-    /* Conteneur Plein Écran 100% */
-    #androidViewport {
+    /* Conteneur Plein Écran pour le smartphone Android */
+    #androidContainer {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
+      background: #000000;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #000;
       z-index: 1;
     }
 
-    /* Iframe / Canvas intégrant le flux vidéo en plein écran sans bordure */
-    #androidFrame {
+    #streamFrame {
       width: 100%;
       height: 100%;
       border: none;
@@ -55,209 +54,351 @@
       display: block;
     }
 
-    /* Barre de contrôle flottante discrète et rétractable */
-    #controlBar {
+    /* Barre de Navigation Android & Commandes */
+    #bottomNav {
       position: fixed;
-      bottom: 12px;
+      bottom: env(safe-area-inset-bottom, 8px);
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(20, 20, 20, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 30px;
-      padding: 6px 14px;
+      background: rgba(18, 18, 22, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 36px;
+      padding: 6px 16px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       z-index: 9999;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-      transition: all 0.3s ease;
-      opacity: 0.85;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity: 0.9;
     }
 
-    #controlBar:hover, #controlBar:active {
+    #bottomNav:hover, #bottomNav:active, #bottomNav.active {
       opacity: 1;
       transform: translateX(-50%) scale(1.02);
     }
 
-    .btn-ctrl {
+    .nav-btn {
       background: transparent;
       border: none;
-      color: #ffffff;
+      color: #f1f5f9;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 8px;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
-      font-size: 16px;
       transition: all 0.15s ease;
       touch-action: manipulation;
+      outline: none;
     }
 
-    .btn-ctrl:active {
-      background: rgba(255, 255, 255, 0.2);
-      transform: scale(0.9);
+    .nav-btn:active {
+      background: rgba(255, 255, 255, 0.22);
+      transform: scale(0.88);
     }
 
-    .btn-ctrl svg {
-      width: 20px;
-      height: 20px;
+    .nav-btn svg {
+      width: 22px;
+      height: 22px;
       fill: currentColor;
     }
 
-    /* Écran de chargement immersif */
-    #loadingScreen {
+    .nav-btn.kb-btn {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    /* Tiroir de saisie clavier mobile ultra-pratique */
+    #keyboardDrawer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #18181b;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 12px 16px env(safe-area-inset-bottom, 12px);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10000;
+      box-shadow: 0 -8px 30px rgba(0,0,0,0.8);
+      animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .kb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #kbInput {
+      flex: 1;
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: #ffffff;
+      font-size: 16px;
+      outline: none;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    #kbInput:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+    }
+
+    .kb-action-btn {
+      background: #10b981;
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .kb-action-btn:active {
+      opacity: 0.85;
+      transform: scale(0.96);
+    }
+
+    .kb-close-btn {
+      background: #3f3f46;
+      color: #d4d4d8;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .quick-keys {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .q-key {
+      background: #27272a;
+      color: #e4e4e7;
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .q-key:active {
+      background: #3f3f46;
+    }
+
+    /* Écran de Chargement */
+    #loader {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: #0a0a0c;
+      background: #09090b;
       color: #ffffff;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 10000;
-      transition: opacity 0.5s ease;
+      z-index: 10001;
+      transition: opacity 0.4s ease;
     }
 
     .spinner {
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       border: 3px solid rgba(255, 255, 255, 0.1);
       border-top-color: #10b981;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
-    }
-
-    .loading-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      letter-spacing: -0.01em;
-    }
-
-    .loading-sub {
-      font-size: 13px;
-      color: #94a3b8;
-    }
-
-    /* Barre de gestes Android (en bas) */
-    .android-gesture-pill {
-      width: 90px;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.5);
-      border-radius: 2px;
-      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
   <!-- Écran de chargement -->
-  <div id="loadingScreen">
+  <div id="loader">
     <div class="spinner"></div>
-    <div class="loading-title">Démarrage d'Android 13</div>
-    <div class="loading-sub">Initialisation du flux plein écran ultra-fluide...</div>
+    <div style="font-size: 17px; font-weight: 600; margin-bottom: 6px;">Connexion à Android 13</div>
+    <div style="font-size: 13px; color: #a1a1aa;">Flux Plein Écran Haute Performance (60 FPS)...</div>
   </div>
 
-  <!-- Zone d'affichage Android Plein Écran -->
-  <div id="androidViewport">
-    <iframe id="androidFrame" allow="autoplay; fullscreen; clipboard-read; clipboard-write; microphone; camera"></iframe>
+  <!-- Conteneur Smartphone Android -->
+  <div id="androidContainer">
+    <iframe id="streamFrame" allow="autoplay; fullscreen; clipboard-read; clipboard-write; microphone; camera"></iframe>
   </div>
 
-  <!-- Barre de commande discrète et gestes tactiles -->
-  <div id="controlBar">
+  <!-- Barre de Navigation Android -->
+  <div id="bottomNav">
     <!-- Retour -->
-    <button class="btn-ctrl" onclick="sendKey('back')" title="Retour" aria-label="Retour">
+    <button class="nav-btn" onclick="sendAndroidKey('back')" title="Retour">
       <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     </button>
 
     <!-- Accueil -->
-    <button class="btn-ctrl" onclick="sendKey('home')" title="Accueil" aria-label="Accueil">
+    <button class="nav-btn" onclick="sendAndroidKey('home')" title="Accueil">
       <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
     </button>
 
-    <!-- Applications Récentes -->
-    <button class="btn-ctrl" onclick="sendKey('appswitch')" title="Applications récentes" aria-label="Récents">
+    <!-- Récents / Multitâche -->
+    <button class="nav-btn" onclick="sendAndroidKey('appswitch')" title="Applications récentes">
       <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
     </button>
 
-    <!-- Plein Écran Natif -->
-    <button class="btn-ctrl" onclick="toggleFullscreen()" title="Plein Écran Mobile" aria-label="Plein Écran">
+    <!-- Clavier Mobile Dédié -->
+    <button class="nav-btn kb-btn" onclick="openKeyboardDrawer()" title="Saisir du texte avec votre clavier mobile">
+      <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
+    </button>
+
+    <!-- Plein Écran -->
+    <button class="nav-btn" onclick="toggleFullscreen()" title="Plein Écran">
       <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
     </button>
   </div>
 
+  <!-- Tiroir Clavier Mobile -->
+  <div id="keyboardDrawer">
+    <div class="quick-keys">
+      <button class="q-key" onclick="sendAndroidKey('enter')">⏎ Entrée</button>
+      <button class="q-key" onclick="sendAndroidKey('backspace')">⌫ Effacer</button>
+      <button class="q-key" onclick="sendAndroidKey('tab')">⇥ Tab</button>
+      <button class="q-key" onclick="sendAndroidKey('volup')">🔊 Vol +</button>
+      <button class="q-key" onclick="sendAndroidKey('voldown')">🔉 Vol -</button>
+      <button class="q-key" onclick="sendAndroidKey('power')">⏻ Écran On/Off</button>
+    </div>
+    <div class="kb-row">
+      <input type="text" id="kbInput" placeholder="Tapez votre texte ici..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button class="kb-action-btn" onclick="submitText(false)">Envoyer</button>
+      <button class="kb-action-btn" style="background:#059669;" onclick="submitText(true)">Envoyer + ⏎</button>
+      <button class="kb-close-btn" onclick="closeKeyboardDrawer()">✕</button>
+    </div>
+  </div>
+
   <script>
-    const frame = document.getElementById("androidFrame");
-    const loader = document.getElementById("loadingScreen");
+    const frame = document.getElementById('streamFrame');
+    const loader = document.getElementById('loader');
+    const kbDrawer = document.getElementById('keyboardDrawer');
+    const kbInput = document.getElementById('kbInput');
+    const bottomNav = document.getElementById('bottomNav');
 
-    // Détection de l'hôte et du port pour le flux Android direct
-    const currentHost = window.location.host;
-    const protocol = window.location.protocol;
-
-    // Redirection directe vers le flux plein écran ws-scrcpy ou noVNC allégé
-    // Dans ws-scrcpy ou noVNC, nous injectons les paramètres autoconnect=true & resize=scale
-    const targetStreamUrl = `${protocol}//${currentHost}/stream/`;
-
-    frame.src = targetStreamUrl;
+    // Connexion automatique au flux noVNC ultra-optimisé avec plein écran sans bordure
+    const streamUrl = `/vnc.html?autoconnect=true&resize=scale&quality=8&compression=2&show_dot=false&bell=false`;
+    frame.src = streamUrl;
 
     frame.onload = () => {
       setTimeout(() => {
-        loader.style.opacity = "0";
-        setTimeout(() => loader.style.display = "none", 500);
-      }, 1000);
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 400);
+      }, 800);
     };
 
-    // Gestion du Plein Écran Mobile (iOS & Android)
+    // Fonctions Clavier Mobile
+    function openKeyboardDrawer() {
+      kbDrawer.style.display = 'flex';
+      bottomNav.classList.add('active');
+      setTimeout(() => {
+        kbInput.focus();
+      }, 100);
+    }
+
+    function closeKeyboardDrawer() {
+      kbDrawer.style.display = 'none';
+      bottomNav.classList.remove('active');
+      kbInput.blur();
+    }
+
+    async function submitText(withEnter) {
+      const text = kbInput.value;
+      if (text) {
+        try {
+          await fetch('/api/type', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text, enter: withEnter })
+          });
+          kbInput.value = '';
+        } catch (e) {
+          console.error('Text submission error:', e);
+        }
+      } else if (withEnter) {
+        sendAndroidKey('enter');
+      }
+    }
+
+    kbInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitText(true);
+      }
+    });
+
+    // Raccourcis touches physiques Android (ADB)
+    async function sendAndroidKey(key) {
+      try {
+        await fetch(`/api/key?k=${encodeURIComponent(key)}`);
+      } catch (e) {
+        console.error('Key error:', e);
+      }
+    }
+
+    // Gestion Plein Écran Mobile
     function toggleFullscreen() {
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
         if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(err => console.log(err));
+          document.documentElement.requestFullscreen().catch(() => {});
         } else if (document.documentElement.webkitRequestFullscreen) {
           document.documentElement.webkitRequestFullscreen();
         }
       } else {
         if (document.exitFullscreen) {
-          document.exitFullscreen();
+          document.exitFullscreen().catch(() => {});
         } else if (document.webkitExitFullscreen) {
           document.webkitExitFullscreen();
         }
       }
     }
 
-    // Raccourcis clés système
-    function sendKey(key) {
-      try {
-        frame.contentWindow.postMessage({ type: "keyevent", key: key }, "*");
-      } catch (e) {
-        console.warn("Message sending failed:", e);
-      }
-    }
-
-    // Auto-masquage discret de la barre après 4 secondes d'inactivité
-    let hideTimer = null;
-    function resetHideTimer() {
-      const bar = document.getElementById("controlBar");
-      bar.style.opacity = "0.9";
-      clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => {
-        bar.style.opacity = "0.2";
+    // Auto-masquage discret de la barre après inactivité
+    let navTimeout = null;
+    function resetNavTimer() {
+      bottomNav.style.opacity = '0.9';
+      clearTimeout(navTimeout);
+      navTimeout = setTimeout(() => {
+        if (kbDrawer.style.display !== 'flex') {
+          bottomNav.style.opacity = '0.25';
+        }
       }, 4000);
     }
 
-    document.addEventListener("touchstart", resetHideTimer, { passive: true });
-    document.addEventListener("mousemove", resetHideTimer, { passive: true });
-    resetHideTimer();
+    document.addEventListener('touchstart', resetNavTimer, { passive: true });
+    document.addEventListener('mousemove', resetNavTimer, { passive: true });
+    resetNavTimer();
   </script>
 </body>
 </html>
