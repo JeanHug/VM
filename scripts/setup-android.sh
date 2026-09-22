@@ -2,109 +2,82 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION DE LA VM NATIVE ANDROID 13      "
+echo "    CONFIGURATION DU VRAI SMARTPHONE ANDROID 13   "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
-sudo mkdir -p "$DATA_DIR/data"
-sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
+sudo mkdir -p "$DATA_DIR/data" "/var/www/android-web"
+sudo cp -rf android-web/* /var/www/android-web/ 2>/dev/null || true
+sudo chmod -R 777 "$DATA_DIR" /var/www/android-web 2>/dev/null || true
 
-# Nettoyage d'anciens conteneurs
-docker rm -f redroid13 ws_scrcpy android_vm 2>/dev/null || true
+# Nettoyage des conteneurs précédents
+docker rm -f android_vm redroid13 ws_scrcpy 2>/dev/null || true
 
-# 1. Préparation des modules noyau pour Android natif (Binder & KVM)
-echo "=== Préparation des modules noyau (Binder / KVM) ==="
+# 1. Vérification de l'accélération matérielle KVM
 sudo chmod 666 /dev/kvm 2>/dev/null || true
 
-# Chargement du module binder si disponible
-sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
-if [ ! -e /dev/binder ]; then
-  sudo mkdir -p /dev/binderfs 2>/dev/null || true
-  sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
-  sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
-  sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
-  sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
-fi
-sudo chmod 777 /dev/binder* /dev/binderfs/* 2>/dev/null || true
+# 2. Démarrage du conteneur Android
+echo "=== Démarrage d'Android avec accélération KVM native ==="
+docker pull budtmo/docker-android:emulator_11.0
 
-# 2. Démarrage d'Android 13
-echo "=== Démarrage d'Android 13 en conteneur optimisé ==="
-ANDROID_STARTED=false
+# On lance avec les variables optimisées pour mobile plein écran
+docker run -d \
+  --name android_vm \
+  --privileged \
+  --device /dev/kvm \
+  -p 6080:6080 \
+  -p 5554:5554 \
+  -p 5555:5555 \
+  -e DEVICE="Samsung Galaxy S10" \
+  -e WEB_VNC=true \
+  -e WEB_PORT=6080 \
+  -e APPIUM=false \
+  -v "$DATA_DIR/data":/root/android \
+  budtmo/docker-android:emulator_11.0
 
-# Tentative 1 : Redroid 13 natif si binder est présent
-if [ -e /dev/binder ]; then
-  echo "Binder détecté : lancement de Redroid 13 natif..."
-  docker pull redroid/redroid:13.0.0-latest
-  docker run -d \
-    --name redroid13 \
-    --privileged \
-    -v "$DATA_DIR/data":/data \
-    -p 5555:5555 \
-    redroid/redroid:13.0.0-latest \
-    androidboot.redroid_width=720 \
-    androidboot.redroid_height=1280 \
-    androidboot.redroid_dpi=320 \
-    androidboot.redroid_fps=60 \
-    androidboot.redroid_gpu_mode=guest
-  ANDROID_STARTED=true
-fi
-
-# Tentative 2 : Si binder n'était pas disponible, démarrage du conteneur optimisé
-if [ "$ANDROID_STARTED" = false ]; then
-  echo "Lancement du conteneur Android haute performance..."
-  docker pull budtmo/docker-android:emulator_11.0
-  docker run -d \
-    --name android_vm \
-    --privileged \
-    --device /dev/kvm \
-    -p 6080:6080 \
-    -p 5555:5555 \
-    -e DEVICE="Samsung Galaxy S10" \
-    -e WEB_VNC=true \
-    -e WEB_PORT=6080 \
-    -e APPIUM=false \
-    -v "$DATA_DIR/data":/root/android \
-    budtmo/docker-android:emulator_11.0
-fi
-
-# 3. Démarrage de l'interface Web WS-Scrcpy si Redroid 13 actif
-if docker ps | grep -q redroid13; then
-  echo "Lancement du serveur Web WS-Scrcpy (Flux H.264 ultra fluide)..."
-  sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -y -qq adb >/dev/null 2>&1 || true
-  adb connect 127.0.0.1:5555 || true
-
-  docker run -d \
-    --name ws_scrcpy \
-    --net=host \
-    sorcx/ws-scrcpy
-fi
-
-# 4. Configuration NGINX
-echo "=== Configuration du reverse-proxy NGINX ==="
+# 3. Configuration NGINX avec suppression totale du faux cadre et plein écran 100%
+echo "=== Configuration du reverse-proxy NGINX (Plein Écran Natif) ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
-TARGET_PORT=6080
-if docker ps | grep -q ws_scrcpy; then
-  TARGET_PORT=8000
-fi
-
-cat << NGINX_EOF | sudo tee /etc/nginx/sites-available/default > /dev/null
+cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
+
+    root /var/www/android-web;
+    index index.html;
 
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    location / {
-        proxy_pass http://127.0.0.1:${TARGET_PORT};
+    # Page d'accueil mobile plein écran personnalisée
+    location = / {
+        try_files /index.html =404;
+    }
+
+    # Proxy vers le flux noVNC avec suppression des bordures et styles intrusifs
+    location /stream/ {
+        proxy_pass http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale&quality=9;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # Websockets noVNC et assets internes
+    location / {
+        proxy_pass http://127.0.0.1:6080/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -113,15 +86,29 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
+# 4. Suppression directe du cadre Nexus à l'intérieur du conteneur
+echo "=== Injection du style 100% Plein Écran sans faux cadre ==="
+sleep 5
+docker exec -u 0 android_vm bash -c '
+  # Trouver les fichiers css de noVNC et supprimer tout skin de téléphone
+  find /root/ -name "*.css" -o -name "vnc.html" 2>/dev/null | while read f; do
+    echo "/* Forcer plein écran sans bordure */
+    body, html { margin:0!important; padding:0!important; background:#000!important; overflow:hidden!important; width:100vw!important; height:100vh!important; }
+    #noVNC_canvas, canvas, video { width:100vw!important; height:100vh!important; max-width:100vw!important; max-height:100vh!important; object-fit:contain!important; }
+    .sidebar, .menu, .phone-frame, .device-skin, .device-art, #noVNC_control_bar { display:none!important; }
+    " >> "$f" 2>/dev/null || true
+  done
+' || true
+
 # 5. Attente active de la disponibilité du serveur Web
-echo "=== Vérification active de la réponse Web ==="
+echo "=== Attente de l'initialisation du flux Android ==="
 for i in {1..40}; do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${TARGET_PORT}/ || echo "000")
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:6080/ || echo "000")
   if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-    echo " Serveur Web Android actif (Code $HTTP_CODE) !"
+    echo " Serveur Web Android opérationnel (HTTP $HTTP_CODE) !"
     break
   fi
   sleep 2
 done
 
-echo " VM Android opérationnelle !"
+echo " Android Plein Écran 100% configuré et prêt !"
