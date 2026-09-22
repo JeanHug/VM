@@ -85,7 +85,7 @@ server {
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Proxy direct vers le client WS-Scrcpy (Canvas Plein Écran H.264)
+    # Proxy direct vers le client WS-Scrcpy (Canvas Plein Écran H.264 avec redirection automatique)
     location / {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
@@ -94,6 +94,10 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Accept-Encoding "";
+        sub_filter_types text/html;
+        sub_filter '</head>' '<script>if(!window.location.hash||window.location.hash===""){window.location.replace("#!action=stream&udid=emulator-5554&player=broadway");}</script></head>';
+        sub_filter_once on;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
