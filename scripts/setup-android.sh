@@ -9,7 +9,7 @@ DATA_DIR="/home/runner/android_vm_data"
 sudo mkdir -p "$DATA_DIR/data"
 sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 
-# 1. Nettoyage absolu de tout ancien conteneur émulateur
+# 1. Nettoyage absolu de tout conteneur résiduel
 docker rm -f android_vm redroid13 ws_scrcpy 2>/dev/null || true
 
 # 2. Préparation du noyau Linux (Pilotes Binder & KVM natifs)
@@ -61,13 +61,13 @@ done
 
 # 5. Démarrage du serveur Web Scrcpy (Flux H.264 60 FPS, plein écran natif, zéro cadre)
 echo "=== Démarrage du serveur Web Scrcpy (Flux H.264 matériel) ==="
-docker pull sorcx/ws-scrcpy:latest || true
+docker pull scavin/ws-scrcpy:latest
 
 docker run -d \
   --name ws_scrcpy \
   --net=host \
   --restart always \
-  sorcx/ws-scrcpy:latest
+  scavin/ws-scrcpy:latest
 
 # 6. Configuration de NGINX pour router vers WS-Scrcpy sur le port 3000
 echo "=== Configuration du reverse-proxy NGINX ==="
