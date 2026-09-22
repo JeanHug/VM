@@ -1,8 +1,8 @@
 {
   "name": "Smartphone Android",
-  "primary": "https://specific-landscapes-devices-navy.trycloudflare.com",
-  "cloudflare": "https://specific-landscapes-devices-navy.trycloudflare.com",
-  "lhrLife": "https://79cc261904dcde.lhr.life",
+  "primary": "https://api.trycloudflare.com",
+  "cloudflare": "https://api.trycloudflare.com",
+  "lhrLife": "https://b484d52b8cb5cf.lhr.life",
   "status": "online",
-  "updated_at": "2026-09-22T15:48:53Z"
+  "updated_at": "2026-09-22T15:57:13Z"
 }
