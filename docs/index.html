@@ -330,14 +330,25 @@
         if (!res.ok) throw new Error("Fichier de tunnel non trouvé");
         const data = await res.json();
         
-        // Priorité directe au lien .lhr.life
-        activeTunnelUrl = data.lhrLife || data.primary || data.cloudflare || "";
+        // Extraction stricte et prioritaire du lien direct .lhr.life
+        let lhr = "";
+        if (data.lhrLife && data.lhrLife.includes(".lhr.life")) {
+          lhr = data.lhrLife;
+        } else if (data.primary && data.primary.includes(".lhr.life")) {
+          lhr = data.primary;
+        } else if (data.localhostRun && data.localhostRun.includes(".lhr.life")) {
+          lhr = data.localhostRun;
+        } else {
+          const match = JSON.stringify(data).match(/https:\/\/[a-zA-Z0-9_\-\.]+\.lhr\.life/);
+          if (match) lhr = match[0];
+        }
+        activeTunnelUrl = lhr || data.primary || "";
 
         if (activeTunnelUrl) {
           urlBox.textContent = activeTunnelUrl;
           launchBtn.href = activeTunnelUrl;
           badge.className = "badge badge-online";
-          badge.innerHTML = '<span class="dot"></span> En ligne & Opérationnel';
+          badge.innerHTML = '<span class="dot"></span> En ligne & Opérationnel (.lhr.life)';
         } else {
           urlBox.textContent = "Initialisation du tunnel en cours...";
           badge.className = "badge badge-loading";
