@@ -17,12 +17,11 @@ SHUTDOWN_TIME=$(( START_TIME + RELAY_SHUTDOWN_MINS * 60 ))
 RELAY_TRIGGERED=false
 
 cleanup_and_exit() {
-  echo "Arrêt ordonné..."
+  echo "Arrêt ordonné et sauvegarde finale 100%..."
   ./scripts/backup-sync.sh backup || true
-  pkill -f pinggy || true
-  pkill -f localhost.run || true
   pkill -f cloudflared || true
-  docker stop webtop || true
+  pkill -f localhost.run || true
+  docker stop kasm_desktop || true
   exit 0
 }
 
@@ -31,18 +30,19 @@ trap cleanup_and_exit SIGTERM SIGINT
 while true; do
   NOW=$(date +%s)
   ELAPSED_MINS=$(( (NOW - START_TIME) / 60 ))
-  
-  # Sauvegarde périodique
+
+  # Sauvegarde périodique 100%
   if [ "$NOW" -ge "$NEXT_BACKUP_TIME" ]; then
-    echo "[$(date +'%T')] Sauvegarde périodique..."
+    echo "[$(date +'%T')] Sauvegarde périodique complète..."
     ./scripts/backup-sync.sh backup || true
     NEXT_BACKUP_TIME=$(( NOW + SYNC_INTERVAL_MINS * 60 ))
   fi
 
-  # Relais à 5h15
+  # Relais automatique vers le prochain runner GitHub
   if [ "$NOW" -ge "$TRIGGER_TIME" ] && [ "$RELAY_TRIGGERED" = false ]; then
     NEXT_CYCLE=$(( RELAY_CYCLE + 1 ))
     echo "Lancement du relais vers le cycle $NEXT_CYCLE"
+    
     PAYLOAD=$(cat <<JSON
 {
   "ref": "main",
@@ -58,6 +58,7 @@ JSON
       -H "Authorization: Bearer ${GH_TOKEN}" \
       "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/vm-relay.yml/dispatches" \
       -d "$PAYLOAD" || true
+
     RELAY_TRIGGERED=true
   fi
 
