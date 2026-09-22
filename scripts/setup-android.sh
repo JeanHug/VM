@@ -34,7 +34,7 @@ docker run -d \
   budtmo/docker-android:emulator_11.0
 
 # 3. Configuration du reverse-proxy NGINX sur le port 3000
-echo "=== Configuration du reverse-proxy NGINX (Redirection automatique vers noVNC plein écran) ==="
+echo "=== Configuration du reverse-proxy NGINX (Redirection relative propre) ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
@@ -42,11 +42,14 @@ server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
 
+    port_in_redirect off;
+    absolute_redirect off;
+
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Redirection immédiate de la racine vers noVNC en autoconnect et plein écran
+    # Redirection immédiate relative de la racine vers noVNC en autoconnect et plein écran
     location = / {
         return 302 /vnc.html?autoconnect=true&resize=scale&reconnect=true;
     }
