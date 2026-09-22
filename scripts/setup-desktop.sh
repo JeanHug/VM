@@ -103,53 +103,59 @@ FLAGS_EOF
   cp /home/kasm-user/.config/chrome-flags.conf /home/kasm-user/.config/chromium-flags.conf 2>/dev/null || true
 
   # ----------------------------------------------------
-  # 2. APPLICATION PAR DÉFAUT : GOOGLE ANTIGRAVITY 2.0
+  # 2. APPLICATION PAR DÉFAUT : GOOGLE ANTIGRAVITY (APPLICATION NATIVE LINUX)
   # ----------------------------------------------------
-  echo "Configuration de Google Antigravity 2.0..."
-  # Installation du CLI officiel Antigravity (agy)
+  echo "Installation du paquet officiel Google Antigravity Linux (apt)..."
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg 2>/dev/null || true
+  echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" > /etc/apt/sources.list.d/antigravity.list
+
+  apt-get update -qq || true
+  apt-get install -y --no-install-recommends antigravity || true
+
+  # Installation également du CLI officiel agy
+  echo "Installation du CLI Antigravity (agy)..."
   export HOME=/home/kasm-user
   curl -fsSL https://antigravity.google/cli/install.sh | bash 2>/dev/null || true
   if [ -f /home/kasm-user/.local/bin/agy ]; then
     cp -f /home/kasm-user/.local/bin/agy /usr/local/bin/agy 2>/dev/null || true
     cp -f /home/kasm-user/.local/bin/agy /usr/local/bin/antigravity-cli 2>/dev/null || true
   fi
-  # Wrapper exécutable CLI
-  cat << "ANTIGRAVITY_WRAPPER_EOF" > /usr/local/bin/google-antigravity
-#!/usr/bin/env bash
-exec /usr/local/bin/google-chrome --app="https://antigravity.google" --class="google-antigravity" "$@"
-ANTIGRAVITY_WRAPPER_EOF
-  chmod +x /usr/local/bin/google-antigravity
-  cp -f /usr/local/bin/google-antigravity /usr/local/bin/antigravity 2>/dev/null || true
 
-  # Icône SVG moderne Antigravity 2.0 (Gemini / Antigravity Prism Star)
-  mkdir -p /usr/share/icons/hicolor/scalable/apps /usr/share/pixmaps /home/kasm-user/.local/share/icons
-  cat << "ANTIGRAVITY_SVG_EOF" > /usr/share/icons/hicolor/scalable/apps/google-antigravity.svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
-  <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1B1C20"/>
-      <stop offset="100%" stop-color="#0E0F12"/>
-    </linearGradient>
-    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4285F4"/>
-      <stop offset="30%" stop-color="#9B72CB"/>
-      <stop offset="70%" stop-color="#D96570"/>
-      <stop offset="100%" stop-color="#F4B400"/>
-    </linearGradient>
-    <linearGradient id="orbitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4285F4"/>
-      <stop offset="50%" stop-color="#34A853"/>
-      <stop offset="100%" stop-color="#FBBC04"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bgGrad)" stroke="#2D3035" stroke-width="1.5"/>
-  <ellipse cx="32" cy="32" rx="25" ry="11" fill="none" stroke="url(#orbitGrad)" stroke-width="2.2" transform="rotate(-28 32 32)" stroke-dasharray="5 3"/>
-  <path d="M32 10 C32 22 22 32 10 32 C22 32 32 42 32 54 C32 42 42 32 54 32 C42 32 32 22 32 10 Z" fill="url(#sparkGrad)"/>
-  <circle cx="32" cy="32" r="3.5" fill="#FFFFFF"/>
-</svg>
-ANTIGRAVITY_SVG_EOF
-  cp -f /usr/share/icons/hicolor/scalable/apps/google-antigravity.svg /usr/share/pixmaps/google-antigravity.svg
-  cp -f /usr/share/icons/hicolor/scalable/apps/google-antigravity.svg /home/kasm-user/.local/share/icons/google-antigravity.svg 2>/dev/null || true
+  # Wrapper pour exécuter Antigravity avec support conteneur
+  if command -v antigravity >/dev/null 2>&1; then
+    BIN_AG=$(which antigravity)
+    if [ ! -f /usr/bin/antigravity.bin ]; then
+      cp "$BIN_AG" /usr/bin/antigravity.bin 2>/dev/null || true
+    fi
+    cat << "ANTIGRAVITY_APP_WRAPPER" > /usr/local/bin/antigravity
+#!/usr/bin/env bash
+if [ -x /usr/bin/antigravity.bin ]; then
+  exec /usr/bin/antigravity.bin --no-sandbox --disable-dev-shm-usage "$@"
+elif [ -x /usr/bin/antigravity ]; then
+  exec /usr/bin/antigravity --no-sandbox --disable-dev-shm-usage "$@"
+else
+  exec agy "$@"
+fi
+ANTIGRAVITY_APP_WRAPPER
+    chmod +x /usr/local/bin/antigravity
+  fi
+  cp -f /usr/local/bin/antigravity /usr/local/bin/google-antigravity 2>/dev/null || true
+
+  # Raccourci desktop pour Antigravity
+  cat << "DESKTOP_ANTIGRAVITY_EOF" > /home/kasm-user/Desktop/google-antigravity.desktop
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Antigravity
+GenericName=IDE & Plateforme IA Agentique
+Comment=Plateforme officielle de Développement Agentique Google Antigravity
+Exec=/usr/local/bin/antigravity %U
+Icon=antigravity
+Terminal=false
+Categories=Development;IDE;Utility;
+StartupNotify=true
+DESKTOP_ANTIGRAVITY_EOF
 
   # ----------------------------------------------------
   # 3. APPLICATION PAR DÉFAUT : GOOGLE DOCS
