@@ -7,7 +7,7 @@ RELAY_TRIGGER_MINS="${RELAY_TRIGGER_MINS:-315}"
 RELAY_SHUTDOWN_MINS="${RELAY_SHUTDOWN_MINS:-345}"
 
 echo "=================================================="
-echo "    ORCHESTRATEUR DE RELAIS DE LA VM WEB LINUX    "
+echo "    ORCHESTRATEUR DE RELAIS BI-VM (LINUX & ANDROID) "
 echo "=================================================="
 
 START_TIME=$(date +%s)
@@ -22,7 +22,7 @@ cleanup_and_exit() {
   ./scripts/backup-sync.sh backup || true
   pkill -f cloudflared || true
   pkill -f "nokey@localhost.run" || true
-  docker stop kasm_desktop || true
+  docker stop kasm_desktop redroid ws_scrcpy 2>/dev/null || true
   exit 0
 }
 
@@ -71,13 +71,11 @@ while true; do
 }
 JSON
 )
-
     curl -s -X POST \
       -H "Accept: application/vnd.github.v3+json" \
       -H "Authorization: Bearer ${GH_TOKEN}" \
       "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/vm-relay.yml/dispatches" \
       -d "$PAYLOAD" || true
-
     RELAY_TRIGGERED=true
   fi
 
