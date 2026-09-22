@@ -11,6 +11,10 @@ on:
         description: 'Identifiant de session Android unique'
         required: false
         default: 'session-android'
+      sync_interval_mins:
+        description: 'Intervalle de sauvegarde (minutes)'
+        required: false
+        default: '10'
       relay_trigger_mins:
         description: 'Temps avant lancement du runner suivant (minutes)'
         required: false
@@ -41,6 +45,13 @@ jobs:
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
+      - name: Restore Persistent Android Data
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          ./scripts/backup-sync-android.sh restore
+
       - name: Start Web Smartphone Android 13
         run: |
           ./scripts/setup-android.sh
@@ -62,6 +73,7 @@ jobs:
           CLOUDFLARE_ID: ${{ secrets.CLOUDFLARE_ID }}
           RELAY_CYCLE: ${{ github.event.inputs.relay_cycle || 1 }}
           SESSION_ID: ${{ github.event.inputs.session_id || 'session-android' }}
+          SYNC_INTERVAL_MINS: ${{ github.event.inputs.sync_interval_mins || 10 }}
           RELAY_TRIGGER_MINS: ${{ github.event.inputs.relay_trigger_mins || 315 }}
           RELAY_SHUTDOWN_MINS: ${{ github.event.inputs.relay_shutdown_mins || 345 }}
         run: |
