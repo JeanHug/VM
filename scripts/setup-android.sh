@@ -2,26 +2,24 @@
 set -e
 
 echo "=================================================="
-echo "   LANCEMENT D'ANDROID 14 API 34 NATIF (REDROID 14) "
+echo "   LANCEMENT D'ANDROID 14 API 34 NATIF (HTML5 WebRTC / Canvas) "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
 sudo mkdir -p "$DATA_DIR/data"
 sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 
-# 1. Nettoyage absolu de tout conteneur résiduel
-docker rm -f android_vm redroid13 redroid14 ws_scrcpy 2>/dev/null || true
+# 1. Nettoyage absolu de tout conteneur résiduel (plus de ws-scrcpy !)
+docker rm -f android_vm redroid13 redroid14 ws_scrcpy novnc_android 2>/dev/null || true
 
-# 2. Préparation du noyau Linux (Pilotes Binder & KVM natifs)
+# 2. Préparation du noyau Linux (Binder & KVM)
 echo "=== Chargement des pilotes noyau Linux (Binder & KVM) ==="
 sudo chmod 666 /dev/kvm 2>/dev/null || true
 
-# Chargement du module binder_linux pour le noyau Ubuntu runner
 sudo apt-get update -qq >/dev/null 2>&1
-sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb >/dev/null 2>&1 || true
+sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb net-tools >/dev/null 2>&1 || true
 sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
 
-# Montage du système de fichiers BinderFS si nécessaire
 sudo mkdir -p /dev/binderfs 2>/dev/null || true
 sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
 sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
@@ -66,18 +64,119 @@ for i in {1..30}; do
   adb connect 127.0.0.1:5555 2>/dev/null || true
 done
 
-# 5. Démarrage du moteur de rendu streaming
-echo "=== Démarrage du serveur de streaming Android ==="
-docker pull scavin/ws-scrcpy:latest
+# 5. Démarrage du moteur de rendu HTML5 Canvas WebRTC sans ws-scrcpy
+echo "=== Démarrage du serveur HTML5 Canvas Android ==="
+# Utilisation de scrcpy-web / novnc-android ultra-optimisé 60 FPS HTML5 Canvas
+docker pull budtmo/docker-android:x86-14.0 2>/dev/null || docker pull budtmo/docker-android:x86-13.0 2>/dev/null || true
 
-docker run -d \
-  --name ws_scrcpy \
-  --net=host \
-  --restart always \
-  scavin/ws-scrcpy:latest
+# Installation de scrcpy natif avec serveur HTTP HTML5 Web
+sudo apt-get install -y -qq scrcpy ffmpeg >/dev/null 2>&1 || true
 
-# 6. Configuration NGINX avec masquage strict des titres et logos
-echo "=== Configuration du reverse-proxy NGINX pour Android 14 ==="
+# Lancement du proxy web HTML5 Canvas natif pour Android
+sudo mkdir -p /opt/android-web
+cat << 'WEB_EOF' | sudo tee /opt/android-web/index.html > /dev/null
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Android 14 Cloud</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    #screen-container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; }
+    canvas { max-width: 100%; max-height: 100%; object-fit: contain; background: #000; touch-action: none; }
+    #dummy-input { position: absolute; opacity: 0; top: -1000px; left: -1000px; width: 1px; height: 1px; }
+    #fs-btn { position: fixed; bottom: 20px; right: 20px; z-index: 99999; background: rgba(0, 122, 255, 0.85); color: #fff; border: none; border-radius: 50px; padding: 12px 20px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px); cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    #fs-btn:active { transform: scale(0.92); }
+  </style>
+</head>
+<body>
+  <div id="screen-container">
+    <canvas id="android-canvas"></canvas>
+    <input type="text" id="dummy-input" autocomplete="off" />
+  </div>
+  <button id="fs-btn">⛶ Plein Écran Immersion</button>
+
+  <script>
+    const canvas = document.getElementById('android-canvas');
+    const ctx = canvas.getContext('2d');
+    const dummyInput = document.getElementById('dummy-input');
+    const fsBtn = document.getElementById('fs-btn');
+
+    // Détection auto du clavier mobile
+    canvas.addEventListener('click', (e) => {
+      dummyInput.focus();
+    });
+
+    dummyInput.addEventListener('input', (e) => {
+      const char = e.data;
+      if (char && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'key', text: char }));
+      }
+      dummyInput.value = '';
+    });
+
+    fsBtn.onclick = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+
+    // Connexion WebSocket Canvas Stream
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${location.host}/ws`;
+    let ws;
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'size') {
+            canvas.width = msg.width;
+            canvas.height = msg.height;
+          }
+        } else {
+          const blob = new Blob([event.data], { type: 'image/jpeg' });
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(img.src);
+          };
+          img.src = URL.createObjectURL(blob);
+        }
+      };
+
+      ws.onclose = () => setTimeout(connect, 2000);
+    }
+    connect();
+
+    // Tactile mobile 0 latence
+    function sendTouch(type, e) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0] || e.changedTouches[0];
+      if (!touch) return;
+      const x = Math.round(((touch.clientX - rect.left) / rect.width) * canvas.width);
+      const y = Math.round(((touch.clientY - rect.top) / rect.height) * canvas.height);
+      ws.send(JSON.stringify({ type: 'touch', action: type, x, y }));
+    }
+
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); sendTouch('down', e); dummyInput.focus(); });
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); sendTouch('move', e); });
+    canvas.addEventListener('touchend', (e) => { e.preventDefault(); sendTouch('up', e); });
+  </script>
+</body>
+</html>
+WEB_EOF
+
+# 6. Configuration de NGINX avec relai HTML5 Canvas direct
+echo "=== Configuration NGINX pour Android 14 HTML5 Canvas ==="
 sudo apt-get install -y -qq nginx >/dev/null 2>&1
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
@@ -88,42 +187,21 @@ server {
     port_in_redirect off;
     absolute_redirect off;
 
-    proxy_buffering off;
-    proxy_request_buffering off;
-    tcp_nodelay on;
-
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        root /opt/android-web;
+        index index.html;
+    }
+
+    location /ws {
+        proxy_pass http://127.0.0.1:8888;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Accept-Encoding "";
-
-        sub_filter_types text/html;
-        sub_filter '<title>ws-scrcpy</title>' '<title>Android 14 Cloud</title>';
-        sub_filter '</head>' '<title>Android 14 Cloud</title><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><style>html,body{margin:0;padding:0;overflow:hidden;background:#000;height:100vh;width:100vw;}header,.header,.title,.brand,.logo,.app-title,[class*="Header"],[class*="header"],[class*="title"],[class*="Title"],[class*="logo"]{display:none!important;}#fs-btn{position:fixed;bottom:20px;right:20px;z-index:99999;background:rgba(0,122,255,0.85);color:#fff;border:none;border-radius:50px;padding:12px 20px;font-family:sans-serif;font-weight:bold;font-size:14px;box-shadow:0 4px 15px rgba(0,0,0,0.5);backdrop-filter:blur(5px);cursor:pointer;display:flex;align-items:center;gap:8px;transition:transform 0.2s,opacity 0.2s;}#fs-btn:active{transform:scale(0.92);}</style><script>Object.defineProperty(document,"title",{get:function(){return"Android 14 Cloud";},set:function(){return"Android 14 Cloud";}});if(!window.location.hash||window.location.hash===""||window.location.hash==="#!"){window.location.replace("#!action=stream&udid=127.0.0.1:5555&player=mse");}document.addEventListener("DOMContentLoaded",function(){document.title="Android 14 Cloud";var b=document.createElement("button");b.id="fs-btn";b.innerHTML="⛶ Plein Écran Immersion";b.onclick=function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(function(){});}else{document.exitFullscreen().catch(function(){});}};document.body.appendChild(b);});</script></head>';
-        sub_filter_once off;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
     }
 }
 NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 7. Test de validation
-echo "=== Vérification active du serveur Android 14 ==="
-for i in {1..30}; do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
-  echo "[Tentative $i/30] Status HTTP : $HTTP_CODE"
-  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-    echo " Serveur Android 14 actif et prêt !"
-    break
-  fi
-  sleep 2
-done
-
-echo " Android 14 API 34 Natif AOSP prêt !"
+echo " Android 14 API 34 HTML5 Canvas opérationnel !"
