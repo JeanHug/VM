@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accès Bureau Virtuel Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --border-focus: #2563eb;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #16a34a;
+      --warning: #ea580c;
+      --danger: #dc2626;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      color: var(--primary);
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="password"], input[type="text"] {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 15px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 13px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background-color 0.2s, transform 0.1s;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: #f8fafc;
+      color: var(--text);
+      border: 1px solid var(--border);
+      margin-top: 10px;
+    }
+
+    .btn-secondary:hover {
+      background-color: #f1f5f9;
+    }
+
+    .alert {
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .alert-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: var(--danger);
+    }
+
+    .status-panel {
+      display: none;
+      margin-top: 24px;
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 14px;
+    }
+
+    .badge-online {
+      background: #ecfdf5;
+      color: var(--success);
+      border: 1px solid #a7f3d0;
+    }
+
+    .badge-loading {
+      background: #fff7ed;
+      color: var(--warning);
+      border: 1px solid #fed7aa;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .url-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      word-break: break-all;
+      margin-bottom: 16px;
+      color: #334155;
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="mainContainer">
+    <div class="header">
+      <div class="logo-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+      </div>
+      <h1>Bureau Virtuel Ubuntu</h1>
+      <p class="subtitle">Accès sécurisé à votre environnement persistant</p>
+    </div>
+
+    <!-- Écran de connexion -->
+    <div id="authSection">
+      <form id="authForm" onsubmit="handleAuth(event)">
+        <div class="form-group">
+          <label for="passwordInput">Mot de passe d'accès</label>
+          <div class="input-wrapper">
+            <input type="password" id="passwordInput" placeholder="Entrez votre mot de passe" autocomplete="current-password" required autofocus>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          Déverrouiller l'accès
+        </button>
+      </form>
+      <div class="alert alert-error" id="errorAlert"></div>
+    </div>
+
+    <!-- Écran de connexion réussie & lancement VM -->
+    <div id="statusSection" class="status-panel">
+      <div id="badgeContainer">
+        <span class="badge badge-online" id="statusBadge">
+          <span class="dot"></span> En ligne & Opérationnel
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label>URL directe active :</label>
+        <div class="url-box" id="tunnelUrlBox">Chargement du tunnel...</div>
+      </div>
+
+      <a id="launchBtn" href="#" target="_blank" class="btn btn-primary" style="margin-bottom: 8px;">
+        Ouvrir la session VM en plein écran
+      </a>
+      
+      <button type="button" class="btn btn-secondary" onclick="copyUrl()">
+        Copier l'adresse directe
+      </button>
+    </div>
+
+    <div class="footer-note">
+      Relais autonome avec persistance 100%
+    </div>
+  </div>
+
+  <script>
+    // Configuration de relais
+    const GITHUB_TUNNEL_URL = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/tunnels.json";
+    // Hash SHA-256 de "1234"
+    const AUTH_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
+    let activeTunnelUrl = "";
+
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function handleAuth(e) {
+      if (e) e.preventDefault();
+      const pwd = document.getElementById("passwordInput").value.trim();
+      const err = document.getElementById("errorAlert");
+      const btn = document.getElementById("submitBtn");
+      
+      err.style.display = "none";
+      btn.textContent = "Vérification...";
+      btn.disabled = true;
+
+      const hash = await sha256(pwd);
+
+      if (hash === AUTH_HASH || pwd === "1234") {
+        sessionStorage.setItem("vm_auth", "true");
+        await fetchAndDisplayTunnel();
+      } else {
+        err.textContent = "Mot de passe incorrect.";
+        err.style.display = "block";
+        btn.textContent = "Déverrouiller l'accès";
+        btn.disabled = false;
+      }
+    }
+
+    async function fetchAndDisplayTunnel() {
+      const authSection = document.getElementById("authSection");
+      const statusSection = document.getElementById("statusSection");
+      const urlBox = document.getElementById("tunnelUrlBox");
+      const launchBtn = document.getElementById("launchBtn");
+      const badge = document.getElementById("statusBadge");
+
+      authSection.style.display = "none";
+      statusSection.style.display = "block";
+
+      try {
+        const res = await fetch(`${GITHUB_TUNNEL_URL}?_t=${Date.now()}`);
+        if (!res.ok) throw new Error("Fichier de tunnel non trouvé");
+        const data = await res.json();
+        
+        // Priorité directe au lien .lhr.life
+        activeTunnelUrl = data.lhrLife || data.primary || data.cloudflare || "";
+
+        if (activeTunnelUrl) {
+          urlBox.textContent = activeTunnelUrl;
+          launchBtn.href = activeTunnelUrl;
+          badge.className = "badge badge-online";
+          badge.innerHTML = '<span class="dot"></span> En ligne & Opérationnel';
+        } else {
+          urlBox.textContent = "Initialisation du tunnel en cours...";
+          badge.className = "badge badge-loading";
+          badge.innerHTML = '<span class="dot"></span> Initialisation...';
+          setTimeout(fetchAndDisplayTunnel, 4000);
+        }
+      } catch (err) {
+        urlBox.textContent = "En attente du lancement de la VM...";
+        badge.className = "badge badge-loading";
+        badge.innerHTML = '<span class="dot"></span> En attente...';
+        setTimeout(fetchAndDisplayTunnel, 4000);
+      }
+    }
+
+    function copyUrl() {
+      if (!activeTunnelUrl) return;
+      navigator.clipboard.writeText(activeTunnelUrl).then(() => {
+        alert("URL copiée dans le presse-papier !");
+      });
+    }
+
+    // Auto-login si déjà authentifié dans la session
+    if (sessionStorage.getItem("vm_auth") === "true") {
+      fetchAndDisplayTunnel();
+    }
+  </script>
+</body>
+</html>
