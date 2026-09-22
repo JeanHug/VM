@@ -521,8 +521,9 @@
       if (dataAndroid) {
         const cfUrl = dataAndroid.cloudflare || dataAndroid.primary || dataAndroid.lhrLife || "";
         if (cfUrl) {
-          urlBoxAndroid.textContent = cfUrl;
-          btnAndroid.href = cfUrl;
+          const directStreamUrl = cfUrl.replace(/\/+$/, "") + "/#!action=stream&udid=emulator-5554&player=broadway";
+          urlBoxAndroid.textContent = directStreamUrl;
+          btnAndroid.href = directStreamUrl;
           btnAndroid.style.pointerEvents = "auto";
           btnAndroid.style.opacity = "1";
           badgeAndroid.className = "badge badge-online";
