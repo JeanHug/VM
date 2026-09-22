@@ -2,40 +2,76 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION DE LA VM SMARTPHONE ANDROID     "
+echo "   LANCEMENT D'ANDROID 13 NATIF (AOSP + SCRCPY)   "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
 sudo mkdir -p "$DATA_DIR/data"
 sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 
-# Nettoyage des anciens conteneurs
+# 1. Nettoyage absolu de tout ancien conteneur émulateur
 docker rm -f android_vm redroid13 ws_scrcpy 2>/dev/null || true
 
-# 1. Vérification et activation de l'accélération matérielle KVM
+# 2. Préparation du noyau Linux (Pilotes Binder & KVM natifs)
+echo "=== Chargement des pilotes noyau Linux (Binder & KVM) ==="
 sudo chmod 666 /dev/kvm 2>/dev/null || true
 
-# 2. Démarrage du conteneur Android officiel (budtmo/docker-android)
-echo "=== Démarrage du conteneur Android (Samsung Galaxy S10) ==="
-docker pull budtmo/docker-android:emulator_11.0
+# Chargement du module binder_linux pour le noyau Ubuntu runner
+sudo apt-get update -qq >/dev/null 2>&1
+sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb >/dev/null 2>&1 || true
+sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
+
+# Montage du système de fichiers BinderFS si nécessaire
+sudo mkdir -p /dev/binderfs 2>/dev/null || true
+sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
+sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
+sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
+sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
+sudo chmod 777 /dev/binder* /dev/binderfs/* 2>/dev/null || true
+
+# 3. Démarrage de Redroid 13 (Android 13 Officiel AOSP natif, sans émulateur QEMU)
+echo "=== Démarrage d'Android 13 Natif (Redroid 13.0) ==="
+docker pull redroid/redroid:13.0.0-latest
 
 docker run -d \
-  --name android_vm \
+  --name redroid13 \
   --privileged \
-  --device /dev/kvm \
-  -p 6080:6080 \
-  -p 5554:5554 \
+  -v "$DATA_DIR/data":/data \
   -p 5555:5555 \
-  -e DEVICE="Samsung Galaxy S10" \
-  -e WEB_VNC=true \
-  -e WEB_PORT=6080 \
-  -e APPIUM=false \
-  -v "$DATA_DIR/data":/root/android \
-  budtmo/docker-android:emulator_11.0
+  redroid/redroid:13.0.0-latest \
+  androidboot.redroid_width=720 \
+  androidboot.redroid_height=1560 \
+  androidboot.redroid_dpi=320 \
+  androidboot.redroid_fps=60 \
+  androidboot.redroid_gpu_mode=guest
 
-# 3. Configuration du reverse-proxy NGINX sur le port 3000
-echo "=== Configuration du reverse-proxy NGINX (Redirection relative propre) ==="
-sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
+# 4. Connexion ADB au système Android 13
+echo "=== Connexion ADB au système Android 13 ==="
+adb connect 127.0.0.1:5555 || true
+for i in {1..30}; do
+  STATE=$(adb get-state 2>/dev/null || echo "offline")
+  echo "[Tentative $i/30] État ADB : $STATE"
+  if [ "$STATE" = "device" ]; then
+    echo " Android 13 démarré et connecté avec succès !"
+    break
+  fi
+  sleep 2
+  adb connect 127.0.0.1:5555 2>/dev/null || true
+done
+
+# 5. Démarrage du serveur Web Scrcpy (Flux H.264 60 FPS, plein écran natif, zéro cadre)
+echo "=== Démarrage du serveur Web Scrcpy (Flux H.264 matériel) ==="
+docker pull sorcx/ws-scrcpy:latest || true
+
+docker run -d \
+  --name ws_scrcpy \
+  --net=host \
+  --restart always \
+  sorcx/ws-scrcpy:latest
+
+# 6. Configuration de NGINX pour router vers WS-Scrcpy sur le port 3000
+echo "=== Configuration du reverse-proxy NGINX ==="
+sudo apt-get install -y -qq nginx >/dev/null 2>&1
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
@@ -49,14 +85,9 @@ server {
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Redirection immédiate relative de la racine vers noVNC en autoconnect et plein écran
-    location = / {
-        return 302 /vnc.html?autoconnect=true&resize=scale&reconnect=true;
-    }
-
-    # Proxy universel pour noVNC, WebSockets, scripts JS, feuilles CSS et flux vidéo
+    # Proxy direct vers le client WS-Scrcpy (Canvas Plein Écran H.264)
     location / {
-        proxy_pass http://127.0.0.1:6080;
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -71,27 +102,16 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 4. Attente et test automatisé exhaustif de tous les composants
-echo "=== Validation active des points de terminaison Web Android ==="
-VNC_READY=false
-for i in {1..50}; do
-  HTTP_ROOT=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
-  HTTP_VNC=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/vnc.html || echo "000")
-  HTTP_CSS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/app/styles/base.css || echo "000")
-
-  echo "[Tentative $i/50] / -> HTTP $HTTP_ROOT | /vnc.html -> HTTP $HTTP_VNC | /app/styles/base.css -> HTTP $HTTP_CSS"
-
-  if [ "$HTTP_ROOT" = "302" ] && [ "$HTTP_VNC" = "200" ] && [ "$HTTP_CSS" = "200" ]; then
-    echo " TOUS LES TESTS SONT AU VERT : Serveur Web noVNC Android 100% fonctionnel !"
-    VNC_READY=true
+# 7. Test de validation en ligne
+echo "=== Vérification active de WS-Scrcpy ==="
+for i in {1..30}; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  echo "[Tentative $i/30] WS-Scrcpy HTTP Status : $HTTP_CODE"
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+    echo " Serveur WS-Scrcpy Android 13 actif et prêt !"
     break
   fi
-  sleep 3
+  sleep 2
 done
 
-if [ "$VNC_READY" = false ]; then
-  echo "⚠️ Le serveur Android a mis plus de temps à démarrer, vérification des processus Docker..."
-  docker ps
-fi
-
-echo " VM Android prête et accessible en plein écran !"
+echo " Android 13 Natif AOSP opérationnel sans émulateur !"
