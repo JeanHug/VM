@@ -15,7 +15,7 @@ sudo chmod -R 775 "$DATA_DIR"
 # Nettoyage des conteneurs précédents
 docker rm -f kasm_desktop 2>/dev/null || true
 
-# 1. Démarrage de l'image Kasm Desktop Ubuntu complète et interactive
+# 1. Démarrage de l'image Kasm Desktop Ubuntu complète
 echo "=== Téléchargement et lancement de Kasm Desktop Ubuntu ==="
 docker pull kasmweb/ubuntu-jammy-desktop:1.16.0
 docker run -d \
@@ -66,73 +66,242 @@ for i in {1..40}; do
   sleep 2
 done
 
-# 4. Installation propre et sans conflit des applications officielles
-echo "=== Configuration des applications & raccourcis sur le bureau ==="
+# 4. Installation et configuration de Google Chrome, Antigravity 2.0 et Google Docs
+echo "=== Installation des applications officielles et optimisation du bureau ==="
 docker exec -u 0 kasm_desktop bash -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null 2>&1 || true
   apt-get install -y -qq xclip xsel autocutsel wget curl gnupg > /dev/null 2>&1 || true
 
-  # Installation officielle de Google Chrome Stable si absent
-  if ! command -v google-chrome-stable &>/dev/null && ! command -v google-chrome &>/dev/null; then
-    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-    apt-get update -qq >/dev/null 2>&1 || true
-    apt-get install -y -qq google-chrome-stable >/dev/null 2>&1 || true
-  fi
-
-  # Synchronisation du presse-papier X11
+  # Synchronisation automatique du presse-papier X11
   su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
   su - kasm-user -c "autocutsel -selection PRIMARY -fork >/dev/null 2>&1 || true"
 
-  # Raccourcis directs sur le Bureau
-  mkdir -p /home/kasm-user/Desktop
+  # ----------------------------------------------------
+  # 1. APPLICATION PAR DÉFAUT : GOOGLE CHROME OFFICIEL
+  # ----------------------------------------------------
+  echo "Installation de Google Chrome officiel..."
+  if ! [ -x /opt/google/chrome/google-chrome ] && ! [ -x /usr/bin/google-chrome-stable ]; then
+    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    apt-get update -qq >/dev/null 2>&1 || true
+    apt-get install -y -qq google-chrome-stable >/dev/null 2>&1 || {
+      curl -sSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      dpkg -i /tmp/google-chrome.deb 2>/dev/null || apt-get install -y -f -qq >/dev/null 2>&1
+      rm -f /tmp/google-chrome.deb
+    }
+  fi
 
-  # 1. Raccourci Google Chrome (avec flag sandbox docker propre)
-  cat << "EOF_CHROME" > /home/kasm-user/Desktop/google-chrome.desktop
+  # Wrapper multi-fallback pour Google Chrome adapté au conteneur Docker (sans crash sandbox)
+  cat << "CHROME_WRAPPER_EOF" > /usr/local/bin/google-chrome
+#!/usr/bin/env bash
+for bin in /opt/google/chrome/google-chrome /usr/bin/google-chrome-stable /usr/bin/google-chrome /usr/bin/chromium-browser /usr/bin/chromium; do
+  if [ -x "$bin" ] && [ "$bin" != "/usr/local/bin/google-chrome" ]; then
+    exec "$bin" --no-sandbox --disable-dev-shm-usage --disable-gpu --password-store=basic --no-default-browser-check "$@"
+  fi
+done
+echo "Navigateur Google Chrome non trouvé" >&2
+exit 1
+CHROME_WRAPPER_EOF
+  chmod +x /usr/local/bin/google-chrome
+  cp -f /usr/local/bin/google-chrome /usr/local/bin/chrome 2>/dev/null || true
+
+  # Rétention des configurations Chrome
+  mkdir -p /home/kasm-user/.config
+  cat << "FLAGS_EOF" > /home/kasm-user/.config/chrome-flags.conf
+--no-sandbox
+--disable-dev-shm-usage
+--disable-gpu
+--password-store=basic
+--no-default-browser-check
+--disable-features=Translate
+FLAGS_EOF
+  cp /home/kasm-user/.config/chrome-flags.conf /home/kasm-user/.config/chromium-flags.conf 2>/dev/null || true
+
+  # ----------------------------------------------------
+  # 2. APPLICATION PAR DÉFAUT : GOOGLE ANTIGRAVITY 2.0
+  # ----------------------------------------------------
+  echo "Configuration de Google Antigravity 2.0..."
+  # Wrapper exécutable CLI
+  cat << "ANTIGRAVITY_WRAPPER_EOF" > /usr/local/bin/google-antigravity
+#!/usr/bin/env bash
+exec /usr/local/bin/google-chrome --app="https://antigravity.google" --class="google-antigravity" "$@"
+ANTIGRAVITY_WRAPPER_EOF
+  chmod +x /usr/local/bin/google-antigravity
+  cp -f /usr/local/bin/google-antigravity /usr/local/bin/antigravity 2>/dev/null || true
+
+  # Icône SVG officielle Google Antigravity 2.0 (Gemini / Antigravity Prism Star)
+  mkdir -p /usr/share/icons/hicolor/scalable/apps /usr/share/pixmaps /home/kasm-user/.local/share/icons
+  cat << "ANTIGRAVITY_SVG_EOF" > /usr/share/icons/hicolor/scalable/apps/google-antigravity.svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B1C20"/>
+      <stop offset="100%" stop-color="#0E0F12"/>
+    </linearGradient>
+    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="30%" stop-color="#9B72CB"/>
+      <stop offset="70%" stop-color="#D96570"/>
+      <stop offset="100%" stop-color="#F4B400"/>
+    </linearGradient>
+    <linearGradient id="orbitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="50%" stop-color="#34A853"/>
+      <stop offset="100%" stop-color="#FBBC04"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bgGrad)" stroke="#2D3035" stroke-width="1.5"/>
+  <ellipse cx="32" cy="32" rx="25" ry="11" fill="none" stroke="url(#orbitGrad)" stroke-width="2.2" transform="rotate(-28 32 32)" stroke-dasharray="5 3"/>
+  <path d="M32 10 C32 22 22 32 10 32 C22 32 32 42 32 54 C32 42 42 32 54 32 C42 32 32 22 32 10 Z" fill="url(#sparkGrad)"/>
+  <circle cx="32" cy="32" r="3.5" fill="#FFFFFF"/>
+</svg>
+ANTIGRAVITY_SVG_EOF
+  cp -f /usr/share/icons/hicolor/scalable/apps/google-antigravity.svg /usr/share/pixmaps/google-antigravity.svg
+  cp -f /usr/share/icons/hicolor/scalable/apps/google-antigravity.svg /home/kasm-user/.local/share/icons/google-antigravity.svg 2>/dev/null || true
+
+  # ----------------------------------------------------
+  # 3. APPLICATION PAR DÉFAUT : GOOGLE DOCS
+  # ----------------------------------------------------
+  echo "Configuration de Google Docs..."
+  cat << "DOCS_WRAPPER_EOF" > /usr/local/bin/google-docs
+#!/usr/bin/env bash
+exec /usr/local/bin/google-chrome --app="https://docs.google.com" --class="google-docs" "$@"
+DOCS_WRAPPER_EOF
+  chmod +x /usr/local/bin/google-docs
+
+  # Icône SVG officielle Google Docs
+  cat << "DOCS_SVG_EOF" > /usr/share/icons/hicolor/scalable/apps/google-docs.svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="128" height="128">
+  <path fill="#4285F4" d="M30 4H12C9.79 4 8 5.79 8 8v32c0 2.21 1.79 4 4 4h24c2.21 0 4-1.79 4-4V16L30 4z"/>
+  <path fill="#A1C2FA" d="M30 4v12h12L30 4z"/>
+  <path fill="#FFFFFF" d="M16 22h16v2.5H16zm0 6h16v2.5H16zm0 6h10v2.5H16z"/>
+</svg>
+DOCS_SVG_EOF
+  cp -f /usr/share/icons/hicolor/scalable/apps/google-docs.svg /usr/share/pixmaps/google-docs.svg
+  cp -f /usr/share/icons/hicolor/scalable/apps/google-docs.svg /home/kasm-user/.local/share/icons/google-docs.svg 2>/dev/null || true
+
+  # ----------------------------------------------------
+  # CRÉATION DES RACCOURCIS SUR LE BUREAU ET MENU SYSTÈME
+  # ----------------------------------------------------
+  mkdir -p /home/kasm-user/Desktop /usr/share/applications
+
+  # Raccourci Google Chrome
+  cat << "DESKTOP_CHROME_EOF" > /home/kasm-user/Desktop/google-chrome.desktop
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Google Chrome
 GenericName=Navigateur Web
-Comment=Naviguer sur le web
-Exec=google-chrome-stable --no-sandbox --disable-dev-shm-usage %U
+Comment=Accéder à Internet et à vos applications web
+Exec=/usr/local/bin/google-chrome %U
 Icon=google-chrome
 Terminal=false
-Categories=Network;WebBrowser;
-EOF_CHROME
+Categories=Network;WebBrowser;StartupNotify=true
+Actions=new-window;new-private-window;
+DESKTOP_CHROME_EOF
 
-  # 2. Raccourci Google Docs
-  cat << "EOF_DOCS" > /home/kasm-user/Desktop/google-docs.desktop
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Google Docs
-GenericName=Traitement de texte
-Comment=Accéder à Google Docs
-Exec=google-chrome-stable --no-sandbox --disable-dev-shm-usage --app=https://docs.google.com %U
-Icon=google-chrome
-Terminal=false
-Categories=Office;WordProcessor;
-EOF_DOCS
-
-  # 3. Raccourci Google Antigravity
-  cat << "EOF_ANTIGRAV" > /home/kasm-user/Desktop/google-antigravity.desktop
+  # Raccourci Google Antigravity 2.0
+  cat << "DESKTOP_ANTIGRAVITY_EOF" > /home/kasm-user/Desktop/google-antigravity.desktop
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Google Antigravity
-GenericName=IA Autonome Google
-Comment=Plateforme Agentique Google
-Exec=google-chrome-stable --no-sandbox --disable-dev-shm-usage --app=https://antigravity.google %U
-Icon=google-chrome
+GenericName=Plateforme IA Agentique
+Comment=Plateforme de Développement Agentique & IA Autonome Google
+Exec=/usr/local/bin/google-antigravity %U
+Icon=/usr/share/icons/hicolor/scalable/apps/google-antigravity.svg
 Terminal=false
-Categories=Development;
-EOF_ANTIGRAV
+Categories=Development;IDE;Utility;StartupNotify=true
+DESKTOP_ANTIGRAVITY_EOF
 
-  # Permissions correctes pour que le clic fonctionne immédiatement
-  chmod +x /home/kasm-user/Desktop/*.desktop 2>/dev/null || true
+  # Raccourci Google Docs
+  cat << "DESKTOP_DOCS_EOF" > /home/kasm-user/Desktop/google-docs.desktop
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Docs
+GenericName=Traitement de texte en ligne
+Comment=Créer et éditer des documents avec Google Docs
+Exec=/usr/local/bin/google-docs %U
+Icon=/usr/share/icons/hicolor/scalable/apps/google-docs.svg
+Terminal=false
+Categories=Office;WordProcessor;StartupNotify=true
+DESKTOP_DOCS_EOF
+
+  # Copie dans le menu des applications système XFCE
+  cp -f /home/kasm-user/Desktop/google-chrome.desktop /usr/share/applications/
+  cp -f /home/kasm-user/Desktop/google-antigravity.desktop /usr/share/applications/
+  cp -f /home/kasm-user/Desktop/google-docs.desktop /usr/share/applications/
+
+  # Rendre tous les raccourcis exécutables et approuvés pour XFCE
+  chmod +x /home/kasm-user/Desktop/*.desktop /usr/share/applications/*.desktop 2>/dev/null || true
+  chown -R 1000:1000 /home/kasm-user/Desktop
+
+  # Autorisation de sécurité sans avertissement dans XFCE Desktop
+  su - kasm-user -c "gio set /home/kasm-user/Desktop/*.desktop metadata::trusted true 2>/dev/null || true"
+
+  # Snapshot des paquets initiaux pour détecter les nouveaux paquets installés
+  if [ ! -f /etc/initial_manual_packages.txt ]; then
+    apt-mark showmanual 2>/dev/null > /etc/initial_manual_packages.txt || true
+  fi
+
+  # Guide clair sur le Bureau avec explications copier/coller
+  cat << "README_EOF" > /home/kasm-user/Desktop/INSTALLER_DES_APPLICATIONS.txt
+=====================================================
+ GUIDE RAPIDE VM LINUX & APPLICATIONS PAR DÉFAUT
+=====================================================
+
+1. APPLICATIONS PRÉ-INSTALLÉES PAR DÉFAUT :
+   - Google Chrome (Navigateur web officiel complet)
+   - Google Antigravity (Plateforme agentique & IA Google)
+   - Google Docs (Suite bureautique & traitement de texte)
+   --> Tous les raccourcis sont directement sur votre Bureau !
+
+2. COMMENT COLLER DES COMMANDES DANS LA VM :
+   - DANS LE TERMINAL LINUX : Utilisez CLIC DROIT -> COLLER
+     ou faites CTRL + MAJ + V (car sous Linux, Ctrl+V dans
+     un terminal est un caractère spécial).
+   - VIA LE PANNEAU KASM (Très pratique) :
+     Cliquez sur la petite flèche au milieu du bord gauche
+     de votre écran pour ouvrir le menu Kasm, puis cliquez
+     sur l icône Presse-papier (Clipboard) pour coller n importe
+     quel texte immédiatement dans la VM !
+   - EN PLEIN ÉCRAN : Ouvrez le lien dans un nouvel onglet
+     pour autoriser l accès direct au presse-papier du navigateur.
+
+3. INSTALLATION DE NOUVELLES APPLICATIONS (APT) :
+   Ouvrez le Terminal et tapez simplement :
+   sudo apt update && sudo apt install -y <nom_du_paquet>
+
+   Exemples :
+   - VLC : sudo apt install -y vlc
+   - GIMP : sudo apt install -y gimp
+   - Geany (Éditeur) : sudo apt install -y geany
+   - Python 3 : sudo apt install -y python3-pip
+   - Node.js : sudo apt install -y nodejs npm
+   --> Toutes vos applications sont 100% conservées entre les relais !
+=====================================================
+README_EOF
+
+  # Script raccourci install-app
+  cat << "INSTALLER_SCRIPT" > /usr/local/bin/install-app
+#!/usr/bin/env bash
+if [ -z "$1" ]; then
+  echo "Usage: install-app <nom_du_paquet>"
+  exit 1
+fi
+sudo apt-get update && sudo apt-get install -y "$@"
+INSTALLER_SCRIPT
+  chmod +x /usr/local/bin/install-app
+
+  # Réinstallation automatique des paquets précédemment installés si la liste existe
+  if [ -f /home/kasm-user/.installed_packages.txt ] && [ -s /home/kasm-user/.installed_packages.txt ]; then
+    echo "Réinstallation automatique des paquets..."
+    apt-get update -qq && xargs -r -a /home/kasm-user/.installed_packages.txt apt-get install -y --no-install-recommends || true
+  fi
+
   chown -R 1000:1000 /home/kasm-user
 '
 
-echo " Bureau 100% interactif, Google Chrome, Docs et Antigravity configurés !"
+echo " Bureau, Google Chrome, Antigravity et Google Docs configurés !"
