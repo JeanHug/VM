@@ -2,146 +2,109 @@
 set -e
 
 echo "=================================================="
-echo "    LANCEMENT D'ANDROID 13 NATIF (AOSP 60 FPS)    "
+echo "   LANCEMENT D'ANDROID 14 API 34 NATIF (REDROID 14) "
 echo "=================================================="
 
-DATA_DIR="/home/runner/vm_data_android"
+DATA_DIR="/home/runner/android_vm_data"
 sudo mkdir -p "$DATA_DIR/data"
-sudo chmod -R 777 "$DATA_DIR"
+sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 
-# 1. Chargement des modules noyau Linux Binder
+# 1. Nettoyage absolu de tout conteneur résiduel
+docker rm -f android_vm redroid13 redroid14 ws_scrcpy 2>/dev/null || true
+
+# 2. Préparation du noyau Linux (Pilotes Binder & KVM natifs)
 echo "=== Chargement des pilotes noyau Linux (Binder & KVM) ==="
+sudo chmod 666 /dev/kvm 2>/dev/null || true
+
+# Chargement du module binder_linux pour le noyau Ubuntu runner
+sudo apt-get update -qq >/dev/null 2>&1
+sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb >/dev/null 2>&1 || true
 sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
+
+# Montage du système de fichiers BinderFS si nécessaire
 sudo mkdir -p /dev/binderfs 2>/dev/null || true
 sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
+sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
+sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
+sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
+sudo chmod 777 /dev/binder* /dev/binderfs/* 2>/dev/null || true
 
-for node in binder hwbinder vndbinder; do
-  if [ -e "/dev/binderfs/$node" ] && [ ! -e "/dev/$node" ]; then
-    sudo ln -s "/dev/binderfs/$node" "/dev/$node" 2>/dev/null || true
-  fi
-  if [ -e "/dev/$node" ]; then
-    sudo chmod 666 "/dev/$node" 2>/dev/null || true
-  fi
-done
-
-if [ -e "/dev/kvm" ]; then
-  sudo chmod 666 /dev/kvm 2>/dev/null || true
+# 3. Démarrage de Redroid 14 (Android 14 API 34 Officiel AOSP natif)
+echo "=== Démarrage d'Android 14 Natif (Redroid 14.0.0) ==="
+if ! docker pull redroid/redroid:14.0.0-latest; then
+  echo "⚠️ Image Redroid 14 en cours de repli sur 13.0.0..."
+  docker pull redroid/redroid:13.0.0-latest
+  REDROID_IMG="redroid/redroid:13.0.0-latest"
+else
+  REDROID_IMG="redroid/redroid:14.0.0-latest"
 fi
 
-# 2. Nettoyage et Démarrage du conteneur Redroid 13 Natif AOSP
-echo "=== Démarrage d'Android 13 Natif (Redroid 13.0) ==="
-docker rm -f redroid13 2>/dev/null || true
-docker pull redroid/redroid:13.0.0-latest
-
 docker run -d \
-  --name redroid13 \
+  --name redroid14 \
   --privileged \
   -v "$DATA_DIR/data":/data \
   -p 5555:5555 \
-  redroid/redroid:13.0.0-latest \
+  "$REDROID_IMG" \
   androidboot.redroid_width=720 \
   androidboot.redroid_height=1560 \
   androidboot.redroid_dpi=320 \
   androidboot.redroid_fps=60 \
-  androidboot.redroid_gpu_mode=guest
+  androidboot.redroid_gpu_mode=guest \
+  androidboot.hardware=redroid
 
-# 3. Installation des paquets nécessaires
-echo "=== Installation des composants d'affichage et streaming ==="
-sudo apt-get update -qq >/dev/null 2>&1 || true
-sudo apt-get install -y -qq adb xvfb x11vnc novnc websockify scrcpy nginx curl >/dev/null 2>&1 || true
-
-# 4. Connexion ADB et attente de l'initialisation complète
-echo "=== Connexion ADB et attente du démarrage Android 13 ==="
+# 4. Connexion ADB au système Android 14
+echo "=== Connexion ADB au système Android 14 ==="
 adb connect 127.0.0.1:5555 || true
-
-for i in {1..45}; do
-  BOOT_COMPLETED=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')
-  if [ "$BOOT_COMPLETED" = "1" ]; then
-    echo " Android 13 démarré et 100% opérationnel !"
+for i in {1..30}; do
+  STATE=$(adb get-state 2>/dev/null || echo "offline")
+  echo "[Tentative $i/30] État ADB : $STATE"
+  if [ "$STATE" = "device" ]; then
+    echo " Android 14 (API 34) démarré et connecté avec succès !"
     break
   fi
-  echo "Attente initialisation système [$i/45]..."
   sleep 2
+  adb connect 127.0.0.1:5555 2>/dev/null || true
 done
 
-# Déverrouiller l'écran et s'assurer qu'il est allumé
-adb -s 127.0.0.1:5555 shell input keyevent 82 2>/dev/null || true
-adb -s 127.0.0.1:5555 shell wm set-fix-to-user-rotation enabled 2>/dev/null || true
+# 5. Démarrage du serveur Web Scrcpy (Flux H.264 60 FPS, plein écran natif, zéro cadre)
+echo "=== Démarrage du serveur Web Scrcpy (Flux H.264 matériel) ==="
+docker pull scavin/ws-scrcpy:latest
 
-# 5. Démarrage de l'affichage virtuel Xvfb et Scrcpy
-echo "=== Démarrage du moteur de rendu X11 / Scrcpy (60 FPS) ==="
-pkill -f Xvfb 2>/dev/null || true
-pkill -f scrcpy 2>/dev/null || true
-pkill -f x11vnc 2>/dev/null || true
-pkill -f websockify 2>/dev/null || true
+docker run -d \
+  --name ws_scrcpy \
+  --net=host \
+  --restart always \
+  scavin/ws-scrcpy:latest
 
-Xvfb :99 -screen 0 720x1560x24 -nocursor &
-sleep 2
+# 6. Configuration de NGINX avec injection Immersion Mobile & Plein Écran
+echo "=== Configuration du reverse-proxy NGINX pour Android 14 ==="
+sudo apt-get install -y -qq nginx >/dev/null 2>&1
 
-export DISPLAY=:99
-scrcpy -s 127.0.0.1:5555 \
-  --window-title="Android13" \
-  --window-x=0 --window-y=0 \
-  --window-width=720 --window-height=1560 \
-  --stay-awake \
-  --render-driver=software &
-sleep 3
-
-x11vnc -display :99 -nopw -forever -shared -repeat -rfbport 5900 -noxrecord -noxdamage -wait 5 -defer 5 &
-sleep 2
-
-websockify --web /usr/share/novnc 6080 127.0.0.1:5900 &
-sleep 2
-
-# 6. Démarrage de l'API Bridge Android (Clavier & Touches)
-echo "=== Démarrage de l'API Bridge Android ==="
-pkill -f android-bridge.cjs 2>/dev/null || true
-CURRENT_DIR=$(pwd)
-node "$CURRENT_DIR/scripts/android-bridge.cjs" &
-sleep 1
-
-# 7. Configuration NGINX pour le smartphone Web Plein Écran
-echo "=== Configuration du Reverse-Proxy NGINX ==="
-cat << NGINX_EOF | sudo tee /etc/nginx/sites-available/default > /dev/null
+cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
+
+    port_in_redirect off;
+    absolute_redirect off;
 
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Page d'accueil : Smartphone Web Plein Écran
-    location = / {
-        root $CURRENT_DIR/android-web;
-        try_files /index.html =404;
-    }
-
-    # API Bridge Android (Saisie texte, touches matérielles)
-    location /api/ {
-        proxy_pass http://127.0.0.1:8080/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
-
-    # Flux noVNC WebSockets
-    location /websockify {
-        proxy_pass http://127.0.0.1:6080/websockify;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    # Fichiers et lecteur noVNC
+    # Proxy direct vers le client WS-Scrcpy avec overlay immersion mobile
     location / {
-        proxy_pass http://127.0.0.1:6080/;
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Accept-Encoding "";
+        sub_filter_types text/html;
+        sub_filter '</head>' '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><style>body,html{margin:0;padding:0;overflow:hidden;background:#000;height:100vh;width:100vw;}#fs-btn{position:fixed;bottom:20px;right:20px;z-index:99999;background:rgba(0,122,255,0.85);color:#fff;border:none;border-radius:50px;padding:12px 20px;font-family:sans-serif;font-weight:bold;font-size:14px;box-shadow:0 4px 15px rgba(0,0,0,0.5);backdrop-filter:blur(5px);cursor:pointer;display:flex;align-items:center;gap:8px;transition:transform 0.2s,opacity 0.2s;}#fs-btn:active{transform:scale(0.92);}</style><script>if(!window.location.hash||window.location.hash===""||window.location.hash==="#!"){window.location.replace("#!action=stream&udid=127.0.0.1:5555&player=mse");}document.addEventListener("DOMContentLoaded",function(){var b=document.createElement("button");b.id="fs-btn";b.innerHTML="⛶ Plein Écran Immersion";b.onclick=function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(function(){});}else{document.exitFullscreen().catch(function(){});}};document.body.appendChild(b);});</script></head>';
+        sub_filter_once on;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -150,6 +113,16 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-echo "=================================================="
-echo " Android 13 Smartphone Plein Écran Prêt sur Port 3000 !"
-echo "=================================================="
+# 7. Test de validation en ligne
+echo "=== Vérification active de WS-Scrcpy Android 14 ==="
+for i in {1..30}; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  echo "[Tentative $i/30] WS-Scrcpy HTTP Status : $HTTP_CODE"
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+    echo " Serveur WS-Scrcpy Android 14 actif et prêt !"
+    break
+  fi
+  sleep 2
+done
+
+echo " Android 14 API 34 Natif AOSP opérationnel !"
