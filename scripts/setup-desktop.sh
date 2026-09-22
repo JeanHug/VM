@@ -2,79 +2,60 @@
 set -e
 
 echo "=================================================="
-echo "   [1/3] CONFIGURATION DU BUREAU VISUEL COMPLET   "
+echo "    CONFIGURATION BUREAU MODERNE HAUTE QUALITÉ   "
 echo "=================================================="
 
 DATA_DIR="/home/runner/vm_data"
 mkdir -p "$DATA_DIR"
 sudo chown -R 1000:1000 "$DATA_DIR"
 
-echo "=== [2/3] Installation des paquets X11, noVNC, XFCE & Google Chrome ==="
-export DEBIAN_FRONTEND=noninteractive
+# 1. Démarrage de l'image officielle Kasm Chrome (KasmVNC v1.16+ ultra moderne, WebAssembly, audio, 60fps)
+echo "=== Démarrage de Kasm Chrome officiel ==="
+docker pull kasmweb/chrome:1.16.0
 
-sudo apt-get update -qq
-sudo apt-get install -y --no-install-recommends \
-  xvfb \
-  x11vnc \
-  novnc \
-  websockify \
-  xfce4 \
-  xfce4-terminal \
-  dbus-x11 \
-  wget \
-  curl \
-  ca-certificates \
-  gnupg \
-  git \
-  htop \
-  python3 > /dev/null 2>&1 || true
+docker run -d \
+  --name kasm_chrome \
+  --shm-size=1024m \
+  -p 6901:6901 \
+  -e VNC_PW=vncpass \
+  -v "$DATA_DIR":/home/kasm-user \
+  kasmweb/chrome:1.16.0
 
-# Installation de Google Chrome officiel
-if ! command -v google-chrome &> /dev/null; then
-  echo "Installation de Google Chrome..."
-  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
-  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
-  sudo apt-get update -qq || true
-  sudo apt-get install -y --no-install-recommends google-chrome-stable > /dev/null 2>&1 || true
-fi
+# 2. Installation de NGINX sur le host pour faire pont HTTP pur vers 3000 sans certificat
+echo "=== Configuration du reverse-proxy NGINX local (Port 3000 HTTP -> 6901 HTTPS) ==="
+sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
-echo "=== [3/3] Démarrage du serveur d'affichage X11 + Desktop + noVNC ==="
-export DISPLAY=:1
+cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
+server {
+    listen 3000 default_server;
+    listen [::]:3000 default_server;
 
-# Arrêt d'éventuels processus précédents
-pkill -f Xvfb || true
-pkill -f x11vnc || true
-pkill -f websockify || true
-pkill -f xfce4-session || true
+    location / {
+        proxy_pass https://127.0.0.1:6901;
+        proxy_ssl_verify off;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
+NGINX_EOF
 
-# 1. Lancement de Xvfb (résolution 1280x800, 24 bits de couleur)
-Xvfb :1 -screen 0 1280x800x24 &
-sleep 2
+sudo systemctl restart nginx
 
-# 2. Lancement de l'environnement de bureau XFCE
-dbus-launch --exit-with-session startxfce4 &
-sleep 3
+# 3. Attente que Kasm soit actif
+echo "=== Attente de l'initialisation de Kasm Chrome ==="
+for i in {1..30}; do
+  if curl -s -k https://127.0.0.1:6901/ > /dev/null 2>&1; then
+    echo " Kasm Chrome opérationnel !"
+    break
+  fi
+  sleep 2
+done
 
-# 3. Lancement du serveur VNC local (sans mot de passe, écoute uniquement sur 127.0.0.1:5900)
-x11vnc -display :1 -nopw -listen 127.0.0.1 -xkb -forever -shared -bg &
-sleep 2
-
-# 4. Lancement de noVNC / websockify sur le port HTTP 3000
-# /usr/share/novnc est le dossier des assets web HTML5
-if [ -d "/usr/share/novnc" ]; then
-  NOVNC_WEB="/usr/share/novnc"
-else
-  NOVNC_WEB="/usr/local/share/novnc"
-fi
-
-# Raccourci index.html pointant sur vnc.html avec autoconnect
-sudo cp $NOVNC_WEB/vnc.html $NOVNC_WEB/index.html 2>/dev/null || true
-
-# Démarrage de websockify (VNC WebSocket vers HTTP 3000)
-websockify --web=$NOVNC_WEB 3000 127.0.0.1:5900 &
-sleep 2
-
-# Lancement automatique de Google Chrome dans la session X11
-nohup google-chrome --no-sandbox --disable-dev-shm-usage --start-maximized "https://google.com" > /dev/null 2>&1 &
-
-echo " Bureau visuel noVNC HTTP 3000 opérationnel !"
+echo " Bureau moderne Chrome Kasm opérationnel sur le port 3000 !"
