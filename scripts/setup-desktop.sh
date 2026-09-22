@@ -106,6 +106,13 @@ FLAGS_EOF
   # 2. APPLICATION PAR DÉFAUT : GOOGLE ANTIGRAVITY 2.0
   # ----------------------------------------------------
   echo "Configuration de Google Antigravity 2.0..."
+  # Installation du CLI officiel Antigravity (agy)
+  export HOME=/home/kasm-user
+  curl -fsSL https://antigravity.google/cli/install.sh | bash 2>/dev/null || true
+  if [ -f /home/kasm-user/.local/bin/agy ]; then
+    cp -f /home/kasm-user/.local/bin/agy /usr/local/bin/agy 2>/dev/null || true
+    cp -f /home/kasm-user/.local/bin/agy /usr/local/bin/antigravity-cli 2>/dev/null || true
+  fi
   # Wrapper exécutable CLI
   cat << "ANTIGRAVITY_WRAPPER_EOF" > /usr/local/bin/google-antigravity
 #!/usr/bin/env bash
