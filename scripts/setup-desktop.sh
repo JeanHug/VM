@@ -6,10 +6,12 @@ echo "    CONFIGURATION BUREAU LINUX UBUNTU MODERNE     "
 echo "=================================================="
 
 DATA_DIR="/home/runner/vm_data"
-mkdir -p "$DATA_DIR/Desktop" "$DATA_DIR/Downloads" "$DATA_DIR/Applications" "$DATA_DIR/.config" "$DATA_DIR/.local/bin"
+# Utilisation de sudo pour créer les dossiers afin d éviter toute erreur Permission Denied
+sudo mkdir -p "$DATA_DIR/Desktop" "$DATA_DIR/Downloads" "$DATA_DIR/Applications" "$DATA_DIR/.config" "$DATA_DIR/.local/bin"
 sudo chown -R 1000:1000 "$DATA_DIR"
+sudo chmod -R 775 "$DATA_DIR"
 
-# 1. Démarrage de l'image Kasm Desktop Ubuntu complète (KasmVNC 60fps, WebAssembly, Google Chrome, audio, clipboard)
+# 1. Démarrage de l'image Kasm Desktop Ubuntu complète
 echo "=== Téléchargement et lancement de Kasm Desktop Ubuntu ==="
 docker pull kasmweb/ubuntu-jammy-desktop:1.16.0
 
@@ -22,7 +24,7 @@ docker run -d \
   kasmweb/ubuntu-jammy-desktop:1.16.0
 
 # 2. Configuration du reverse-proxy NGINX avec Authentification transparente
-echo "=== Configuration du reverse-proxy NGINX (HTTP 3000 -> Kasm 6901 HTTPS + Autologin) ==="
+echo "=== Configuration du reverse-proxy NGINX ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
@@ -40,6 +42,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Autologin direct sans pop-up de mot de passe (kasm_user:vncpass)
         proxy_set_header Authorization "Basic a2FzbV91c2VyOnZuY3Bhc3M=";
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
@@ -59,16 +62,22 @@ for i in {1..40}; do
   sleep 2
 done
 
-# 4. Initialisation des optimisations de persistance dans le conteneur
-echo "=== Application des règles de persistance 100% & comptes connectés ==="
+# 4. Optimisations du presse-papier & persistance dans le conteneur
+echo "=== Configuration du presse-papier bidirectionnel & persistance ==="
 docker exec -u 0 kasm_desktop bash -c '
-  # Snapshot des paquets initiaux pour détecter les nouveaux paquets installés par l utilisateur
+  # Installation d utilitaires de presse-papier X11
+  apt-get update -qq && apt-get install -y -qq xclip xsel autocutsel > /dev/null 2>&1 || true
+
+  # Synchronisation automatique du presse-papier X11 (PRIMARY <-> CLIPBOARD)
+  su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
+  su - kasm-user -c "autocutsel -selection PRIMARY -fork >/dev/null 2>&1 || true"
+
+  # Snapshot des paquets initiaux pour détecter les nouveaux paquets installés
   if [ ! -f /etc/initial_manual_packages.txt ]; then
     apt-mark showmanual 2>/dev/null > /etc/initial_manual_packages.txt || true
   fi
 
-  # Configuration de Google Chrome / Chromium pour que les comptes et mots de passe restent 100% connectés
-  # --password-store=basic stocke les sessions dans le profil ~/.config plutôt que dans le trousseau volatile
+  # Configuration de Google Chrome / Chromium pour la rétention des comptes
   mkdir -p /home/kasm-user/.config
   cat << "FLAGS_EOF" > /home/kasm-user/.config/chrome-flags.conf
 --password-store=basic
@@ -77,45 +86,40 @@ docker exec -u 0 kasm_desktop bash -c '
 FLAGS_EOF
   cp /home/kasm-user/.config/chrome-flags.conf /home/kasm-user/.config/chromium-flags.conf 2>/dev/null || true
 
-  # Raccourci d explications sur le bureau de l utilisateur
+  # Guide clair sur le Bureau avec explications copier/coller
   cat << "README_EOF" > /home/kasm-user/Desktop/INSTALLER_DES_APPLICATIONS.txt
 =====================================================
- COMMENT INSTALLER DES APPLICATIONS SUR CETTE VM ?
+ GUIDE RAPIDE VM LINUX & COPIER / COLLER
 =====================================================
 
-1. VIA LE TERMINAL (APT - Recommandé) :
-   Ouvrez le Terminal (dans le menu des applications en bas à gauche) et tapez :
-   sudo apt update && sudo apt install -y <nom-de-l-application>
-   
+1. COMMENT COLLER DES COMMANDES DANS LA VM :
+   - DANS LE TERMINAL LINUX : Utilisez CLIC DROIT -> COLLER
+     ou faites CTRL + MAJ + V (car sous Linux, Ctrl+V dans
+     un terminal est un caractère spécial).
+   - VIA LE PANNEAU KASM (Très pratique) :
+     Cliquez sur la petite flèche au milieu du bord gauche
+     de votre écran pour ouvrir le menu Kasm, puis cliquez
+     sur l icône Presse-papier (Clipboard) pour coller n importe
+     quel texte immédiatement dans la VM !
+   - EN PLEIN ÉCRAN : Ouvrez le lien dans un nouvel onglet
+     pour autoriser l accès direct au presse-papier du navigateur.
+
+2. INSTALLATION D APPLICATIONS (APT) :
+   Ouvrez le Terminal et tapez simplement :
+   sudo apt update && sudo apt install -y <nom_du_paquet>
+
    Exemples :
-   - VLC Media Player : sudo apt install -y vlc
-   - GIMP (Retouche photo) : sudo apt install -y gimp
-   - Python & Pip : sudo apt install -y python3-pip
-   - NodeJS / NPM : sudo apt install -y nodejs npm
-   - Htop (Moniteur) : sudo apt install -y htop
+   - VLC : sudo apt install -y vlc
+   - GIMP : sudo apt install -y gimp
+   - Geany (Éditeur) : sudo apt install -y geany
+   - Python 3 : sudo apt install -y python3-pip
+   - Node.js : sudo apt install -y nodejs npm
 
-   --> NOTRE SYSTÈME ENREGISTRE AUTOMATIQUEMENT LA LISTE DE VOS PAQUETS
-       ET LES RÉINSTALLE AUTOMATIQUEMENT À CHAQUE RELAIS !
-
-2. VIA DES APPLICATIONS PORTABLES (AppImage) :
-   Téléchargez n importe quelle AppImage Linux (VS Code, Discord, Obsidian, etc.),
-   placez-la dans votre dossier "Applications" ou sur le Bureau,
-   clic droit -> Propriétés -> Rendre exécutable, et lancez-la !
-   Elle sera conservée à 100% entre les sauvegardes.
-
-3. VIA GOOGLE CHROME (Applications Web & PWA) :
-   Ouvrez Chrome, allez sur WhatsApp Web, Discord, ChatGPT, Spotify, etc.,
-   cliquez sur les 3 points en haut à droite -> "Enregistrer et partager" -> "Installer cette application".
-   Elle apparaîtra dans votre menu et restera connectée 100% du temps !
-
-4. VOS COMPTES & MOTS DE PASSE :
-   Le navigateur est spécialement configuré pour stocker vos sessions de manière
-   persistante. Vous restez connecté à vos comptes (Google, GitHub, etc.)
-   même après le passage au cycle suivant !
+   --> Toutes les applications sont 100% conservées entre les relais !
 =====================================================
 README_EOF
 
-  # Création d un script raccourci "install-app" dans le PATH
+  # Script raccourci install-app
   cat << "INSTALLER_SCRIPT" > /usr/local/bin/install-app
 #!/usr/bin/env bash
 if [ -z "$1" ]; then
@@ -128,11 +132,11 @@ INSTALLER_SCRIPT
 
   # Réinstallation automatique des paquets précédemment installés si la liste existe
   if [ -f /home/kasm-user/.installed_packages.txt ] && [ -s /home/kasm-user/.installed_packages.txt ]; then
-    echo "Réinstallation automatique des paquets utilisateurs : $(cat /home/kasm-user/.installed_packages.txt | tr "\n" " ")"
+    echo "Réinstallation automatique des paquets..."
     apt-get update -qq && xargs -r -a /home/kasm-user/.installed_packages.txt apt-get install -y --no-install-recommends || true
   fi
 
   chown -R 1000:1000 /home/kasm-user
 '
 
-echo " Configuration 100% persistante terminée avec succès !"
+echo " Bureau et presse-papier opérationnels sur le port 3000 !"
