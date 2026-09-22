@@ -521,7 +521,7 @@
       if (dataAndroid) {
         const cfUrl = dataAndroid.cloudflare || dataAndroid.primary || dataAndroid.lhrLife || "";
         if (cfUrl) {
-          const directStreamUrl = cfUrl.replace(/\/+$/, "") + "/#!action=stream&udid=emulator-5554&player=broadway";
+          const directStreamUrl = cfUrl.replace(/\/+$/, "") + "/#!action=stream&udid=127.0.0.1:5555&player=mse";
           urlBoxAndroid.textContent = directStreamUrl;
           btnAndroid.href = directStreamUrl;
           btnAndroid.style.pointerEvents = "auto";
