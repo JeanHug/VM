@@ -45,7 +45,7 @@
       border-radius: var(--radius);
       box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06);
       width: 100%;
-      max-width: 580px;
+      max-width: 640px;
       padding: 36px;
       transition: all 0.3s ease;
     }
@@ -126,9 +126,9 @@
 
     .btn {
       width: 100%;
-      padding: 14px 20px;
+      padding: 12px 18px;
       border-radius: 10px;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       border: none;
@@ -196,11 +196,11 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      padding: 5px 12px;
+      padding: 4px 10px;
       border-radius: 20px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .badge-online {
@@ -222,15 +222,15 @@
       background: currentColor;
     }
 
-    /* Grille de sélection des VM */
+    /* Cartes des 2 VMs */
     .vm-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 20px;
+      gap: 18px;
+      margin-bottom: 24px;
     }
 
-    @media (max-width: 500px) {
+    @media (max-width: 540px) {
       .vm-grid {
         grid-template-columns: 1fr;
       }
@@ -238,21 +238,19 @@
 
     .vm-card {
       border: 1.5px solid var(--border);
-      border-radius: 12px;
-      padding: 20px 16px;
+      border-radius: 14px;
+      padding: 22px 18px;
       text-align: center;
       background: #ffffff;
       transition: all 0.2s ease;
       display: flex;
       flex-direction: column;
-      align-items: center;
       justify-content: space-between;
     }
 
     .vm-card:hover {
       border-color: var(--primary);
       box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-      transform: translateY(-2px);
     }
 
     .vm-card.android:hover {
@@ -260,8 +258,8 @@
     }
 
     .vm-card-icon {
-      font-size: 32px;
-      margin-bottom: 10px;
+      font-size: 34px;
+      margin-bottom: 8px;
     }
 
     .vm-card-title {
@@ -274,19 +272,19 @@
     .vm-card-desc {
       font-size: 12px;
       color: var(--text-muted);
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       line-height: 1.4;
     }
 
     .url-box {
       background: #f8fafc;
       border: 1px solid var(--border);
-      padding: 10px 12px;
-      border-radius: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
       font-family: ui-monospace, monospace;
-      font-size: 12px;
+      font-size: 11px;
       word-break: break-all;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       color: #334155;
       text-align: center;
     }
@@ -329,7 +327,7 @@
         </div>
       </div>
       <h1>Portail Virtuel Cloud</h1>
-      <p class="subtitle">Sélectionnez votre environnement (Ubuntu Linux ou Android 13)</p>
+      <p class="subtitle">Accès direct aux VMs Cloudflare (Ubuntu Linux & Android 13)</p>
     </div>
 
     <!-- Écran de connexion -->
@@ -348,56 +346,62 @@
       <div class="alert alert-error" id="errorAlert"></div>
     </div>
 
-    <!-- Écran de sélection des VM (Ubuntu vs Android) -->
+    <!-- Écran de sélection des 2 VMs distinctes -->
     <div id="statusSection" class="status-panel">
-      <div style="text-align: center;">
-        <span class="badge badge-online" id="statusBadge">
-          <span class="dot"></span> En ligne (.lhr.life)
-        </span>
-      </div>
-
       <div class="vm-grid">
-        <!-- Carte 1 : Bureau Ubuntu -->
+        <!-- VM 1 : Linux Ubuntu Desktop -->
         <div class="vm-card">
-          <div class="vm-card-icon">🖥️</div>
-          <div class="vm-card-title">Bureau Ubuntu</div>
-          <div class="vm-card-desc">Google Chrome, Google Docs, Suite complète XFCE</div>
-          <a id="btnDesktop" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="padding: 10px 14px; font-size: 13px;">
-            Lancer Ubuntu
+          <div>
+            <div class="vm-card-icon">🖥️</div>
+            <div class="vm-card-title">Linux Ubuntu</div>
+            <div class="vm-card-desc">Google Chrome, Google Docs, Suite complète XFCE</div>
+            <div id="badgeLinuxContainer">
+              <span class="badge badge-loading pulse" id="badgeLinux">
+                <span class="dot"></span> En attente Cloudflare...
+              </span>
+            </div>
+            <div class="url-box" id="urlBoxLinux">Connexion...</div>
+          </div>
+          <a id="btnLaunchLinux" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+            🚀 Ouvrir Ubuntu
           </a>
         </div>
 
-        <!-- Carte 2 : Smartphone Android 13 -->
+        <!-- VM 2 : Smartphone Android 13 -->
         <div class="vm-card android">
-          <div class="vm-card-icon">📱</div>
-          <div class="vm-card-title">Android 13</div>
-          <div class="vm-card-desc">Instance Android récente, tactile fluide et applications</div>
-          <a id="btnAndroid" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-android" style="padding: 10px 14px; font-size: 13px;">
-            Lancer Android
+          <div>
+            <div class="vm-card-icon">📱</div>
+            <div class="vm-card-title">Android 13</div>
+            <div class="vm-card-desc">Écran tactile fluide 60 FPS, tactile interactif</div>
+            <div id="badgeAndroidContainer">
+              <span class="badge badge-loading pulse" id="badgeAndroid">
+                <span class="dot"></span> En attente Cloudflare...
+              </span>
+            </div>
+            <div class="url-box" id="urlBoxAndroid">Connexion...</div>
+          </div>
+          <a id="btnLaunchAndroid" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-android">
+            📱 Ouvrir Android
           </a>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label>URL Racine du Serveur :</label>
-        <div class="url-box" id="tunnelUrlBox">Récupération de l'adresse...</div>
       </div>
       
-      <button type="button" class="btn btn-secondary" onclick="copyUrl()">
-        📋 Copier l'adresse de session
+      <button type="button" class="btn btn-secondary" onclick="refreshTunnels()">
+        🔄 Rafraîchir les tunnels Cloudflare
       </button>
     </div>
 
     <div class="footer-note">
-      Double VM persistante (Ubuntu + Android 13) • Relais continu
+      Tunnels Cloudflare TryCloudflare • 2 Workflows Indépendants
     </div>
   </div>
 
   <script>
-    const RAW_URL = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/tunnels.json";
-    const API_URL = "https://api.github.com/repos/JeanHug/VM/contents/tunnels.json?ref=tunnel-url";
+    const RAW_BASE = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/";
     const AUTH_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
-    let activeTunnelUrl = "";
+
+    let linuxUrl = "";
+    let androidUrl = "";
 
     async function sha256(str) {
       const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
@@ -417,7 +421,7 @@
       const hash = await sha256(pwd);
       if (hash === AUTH_HASH || pwd === "1234") {
         sessionStorage.setItem("vm_auth", "true");
-        await fetchAndDisplayTunnel(false);
+        showDashboard();
       } else {
         err.textContent = "Mot de passe incorrect.";
         err.style.display = "block";
@@ -426,87 +430,70 @@
       }
     }
 
-    async function fetchTunnelData() {
-      try {
-        const res = await fetch(`${RAW_URL}?_t=${Date.now()}`);
-        if (res.ok) {
-          return await res.json();
-        }
-      } catch (e) {
-        console.warn("Raw fetch failed, trying API fallback", e);
-      }
+    function showDashboard() {
+      document.getElementById("authSection").style.display = "none";
+      document.getElementById("statusSection").style.display = "block";
+      fetchBothTunnels();
+    }
 
+    async function fetchJson(filename) {
       try {
-        const res = await fetch(`${API_URL}&_t=${Date.now()}`);
-        if (res.ok) {
-          const apiData = await res.json();
-          if (apiData.content) {
-            const rawContent = atob(apiData.content.replace(/\s/g, ''));
-            return JSON.parse(rawContent);
-          }
-        }
+        const res = await fetch(`${RAW_BASE}${filename}?_t=${Date.now()}`);
+        if (res.ok) return await res.json();
       } catch (e) {
-        console.error("API fetch failed", e);
+        console.warn(`Fetch ${filename} failed`, e);
       }
       return null;
     }
 
-    async function fetchAndDisplayTunnel(autoOpen = false) {
-      const authSection = document.getElementById("authSection");
-      const statusSection = document.getElementById("statusSection");
-      const urlBox = document.getElementById("tunnelUrlBox");
-      const btnDesktop = document.getElementById("btnDesktop");
-      const btnAndroid = document.getElementById("btnAndroid");
-      const badge = document.getElementById("statusBadge");
+    async function fetchBothTunnels() {
+      // 1. Récupération URL Linux
+      const dataLinux = (await fetchJson("tunnels-linux.json")) || (await fetchJson("tunnels.json"));
+      const badgeLinux = document.getElementById("badgeLinux");
+      const urlBoxLinux = document.getElementById("urlBoxLinux");
+      const btnLinux = document.getElementById("btnLaunchLinux");
 
-      authSection.style.display = "none";
-      statusSection.style.display = "block";
-
-      const data = await fetchTunnelData();
-      if (data) {
-        let lhr = "";
-        if (data.lhrLife && data.lhrLife.includes(".lhr.life")) {
-          lhr = data.lhrLife;
-        } else if (data.primary && data.primary.includes(".lhr.life")) {
-          lhr = data.primary;
-        } else if (data.localhostRun && data.localhostRun.includes(".lhr.life")) {
-          lhr = data.localhostRun;
-        } else {
-          const match = JSON.stringify(data).match(/https:\/\/[a-zA-Z0-9_\-\.]+\.lhr\.life/);
-          if (match) lhr = match[0];
-        }
-
-        activeTunnelUrl = lhr || data.primary || data.cloudflare || "";
-        if (activeTunnelUrl) {
-          const cleanUrl = activeTunnelUrl.replace(/\/+$/, "");
-          urlBox.textContent = cleanUrl;
-          
-          // Lien Ubuntu Desktop (Racine /)
-          btnDesktop.href = cleanUrl;
-          // Lien Android (/android/)
-          btnAndroid.href = `${cleanUrl}/android/`;
-
-          badge.className = "badge badge-online";
-          badge.innerHTML = '<span class="dot"></span> En ligne (Ubuntu & Android)';
-          return;
+      if (dataLinux) {
+        // Priorité absolue au lien Cloudflare
+        const cfUrl = dataLinux.cloudflare || dataLinux.primary || dataLinux.lhrLife || "";
+        if (cfUrl) {
+          linuxUrl = cfUrl;
+          urlBoxLinux.textContent = cfUrl;
+          btnLinux.href = cfUrl;
+          badgeLinux.className = "badge badge-online";
+          badgeLinux.innerHTML = '<span class="dot"></span> En ligne (Cloudflare)';
         }
       }
 
-      urlBox.textContent = "Initialisation du tunnel en cours...";
-      badge.className = "badge badge-loading pulse";
-      badge.innerHTML = '<span class="dot"></span> Démarrage du relais...';
-      setTimeout(() => fetchAndDisplayTunnel(false), 4000);
+      // 2. Récupération URL Android
+      const dataAndroid = await fetchJson("tunnels-android.json");
+      const badgeAndroid = document.getElementById("badgeAndroid");
+      const urlBoxAndroid = document.getElementById("urlBoxAndroid");
+      const btnAndroid = document.getElementById("btnLaunchAndroid");
+
+      if (dataAndroid) {
+        const cfUrl = dataAndroid.cloudflare || dataAndroid.primary || dataAndroid.lhrLife || "";
+        if (cfUrl) {
+          androidUrl = cfUrl;
+          urlBoxAndroid.textContent = cfUrl;
+          btnAndroid.href = cfUrl;
+          badgeAndroid.className = "badge badge-online";
+          badgeAndroid.innerHTML = '<span class="dot"></span> En ligne (Cloudflare)';
+        }
+      }
+
+      // Re-vérification périodique toutes les 4 secondes si l'un n'est pas encore prêt
+      if (!linuxUrl || !androidUrl) {
+        setTimeout(fetchBothTunnels, 4000);
+      }
     }
 
-    function copyUrl() {
-      if (!activeTunnelUrl) return;
-      navigator.clipboard.writeText(activeTunnelUrl).then(() => {
-        alert("Adresse copiée : " + activeTunnelUrl);
-      });
+    function refreshTunnels() {
+      fetchBothTunnels();
     }
 
     if (sessionStorage.getItem("vm_auth") === "true") {
-      fetchAndDisplayTunnel(false);
+      showDashboard();
     }
   </script>
 </body>
