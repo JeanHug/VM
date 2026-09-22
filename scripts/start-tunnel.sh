@@ -82,7 +82,7 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; t
 JSON
 
   git add current_url.txt updated_at.txt tunnels.json
-  git commit -m "chore(tunnel): active modern kasm chrome desktop [$PRIMARY_URL]" || true
+  git commit -m "chore(tunnel): active ultra-modern linux desktop [$PRIMARY_URL]" || true
   git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g' || true
   cd /
   rm -rf "$TMP_URL_REPO"
