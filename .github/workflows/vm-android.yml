@@ -1,4 +1,4 @@
-name: Web VM Android Persistent Relay
+name: Web VM Android 14 Persistent Relay
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   run-android-vm:
-    name: 'Android Relay Cycle ${{ github.event.inputs.relay_cycle || 1 }}'
+    name: 'Android 14 Relay Cycle ${{ github.event.inputs.relay_cycle || 1 }}'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,7 +52,7 @@ jobs:
         run: |
           ./scripts/backup-sync-android.sh restore
 
-      - name: Start Web Smartphone Android 13
+      - name: Start Web Smartphone Android 14 (API 34)
         run: |
           ./scripts/setup-android.sh
 
