@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Accès Bureau Virtuel Cloud</title>
+  <title>Accès Bureau Virtuel Linux</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -44,7 +44,7 @@
 
     .container {
       width: 100%;
-      max-width: 440px;
+      max-width: 480px;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -58,11 +58,11 @@
     }
 
     .logo-icon {
-      width: 48px;
-      height: 48px;
+      width: 52px;
+      height: 52px;
       background: #eff6ff;
       border: 1px solid #bfdbfe;
-      border-radius: 10px;
+      border-radius: 12px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -103,7 +103,7 @@
     input[type="password"], input[type="text"] {
       width: 100%;
       padding: 12px 14px;
-      font-size: 15px;
+      font-size: 16px;
       border: 1px solid var(--border);
       border-radius: 8px;
       outline: none;
@@ -118,7 +118,7 @@
     .btn {
       width: 100%;
       padding: 13px 20px;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       border-radius: 8px;
       border: none;
@@ -127,7 +127,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: background-color 0.2s, transform 0.1s;
+      transition: all 0.2s;
       text-decoration: none;
     }
 
@@ -138,6 +138,7 @@
 
     .btn-primary:hover {
       background-color: var(--primary-hover);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
     }
 
     .btn-secondary {
@@ -205,13 +206,14 @@
     .url-box {
       background: #f8fafc;
       border: 1px solid var(--border);
-      padding: 10px 12px;
+      padding: 12px 14px;
       border-radius: 8px;
-      font-family: monospace;
-      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
       word-break: break-all;
       margin-bottom: 16px;
-      color: #334155;
+      color: #1e293b;
+      font-weight: 500;
     }
 
     .footer-note {
@@ -220,6 +222,16 @@
       font-size: 12px;
       color: var(--text-muted);
     }
+
+    .pulse {
+      animation: pulse-animation 1.5s infinite;
+    }
+
+    @keyframes pulse-animation {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
   </style>
 </head>
 <body>
@@ -227,7 +239,7 @@
   <div class="container" id="mainContainer">
     <div class="header">
       <div class="logo-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
           <line x1="8" y1="21" x2="16" y2="21"></line>
           <line x1="12" y1="17" x2="12" y2="21"></line>
@@ -243,7 +255,7 @@
         <div class="form-group">
           <label for="passwordInput">Mot de passe d'accès</label>
           <div class="input-wrapper">
-            <input type="password" id="passwordInput" placeholder="Entrez votre mot de passe" autocomplete="current-password" required autofocus>
+            <input type="password" id="passwordInput" placeholder="Entrez le mot de passe (1234)" autocomplete="current-password" required autofocus>
           </div>
         </div>
         <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -257,33 +269,32 @@
     <div id="statusSection" class="status-panel">
       <div id="badgeContainer">
         <span class="badge badge-online" id="statusBadge">
-          <span class="dot"></span> En ligne & Opérationnel
+          <span class="dot"></span> En ligne (.lhr.life)
         </span>
       </div>
 
       <div class="form-group">
-        <label>URL directe active :</label>
-        <div class="url-box" id="tunnelUrlBox">Chargement du tunnel...</div>
+        <label>Lien direct d'accès :</label>
+        <div class="url-box" id="tunnelUrlBox">Récupération de l'adresse...</div>
       </div>
 
-      <a id="launchBtn" href="#" target="_blank" class="btn btn-primary" style="margin-bottom: 8px;">
-        Ouvrir la session VM en plein écran
+      <a id="launchBtn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="margin-bottom: 8px;">
+        🚀 Accéder au Bureau Virtuel
       </a>
       
       <button type="button" class="btn btn-secondary" onclick="copyUrl()">
-        Copier l'adresse directe
+        📋 Copier l'adresse directe
       </button>
     </div>
 
     <div class="footer-note">
-      Relais autonome avec persistance 100%
+      Tunnel direct SSH localhost.run & Persistance 100%
     </div>
   </div>
 
   <script>
-    // Configuration de relais
-    const GITHUB_TUNNEL_URL = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/tunnels.json";
-    // Hash SHA-256 de "1234"
+    const RAW_URL = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/tunnels.json";
+    const API_URL = "https://api.github.com/repos/JeanHug/VM/contents/tunnels.json?ref=tunnel-url";
     const AUTH_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
     let activeTunnelUrl = "";
 
@@ -306,7 +317,7 @@
 
       if (hash === AUTH_HASH || pwd === "1234") {
         sessionStorage.setItem("vm_auth", "true");
-        await fetchAndDisplayTunnel();
+        await fetchAndDisplayTunnel(true);
       } else {
         err.textContent = "Mot de passe incorrect.";
         err.style.display = "block";
@@ -315,7 +326,35 @@
       }
     }
 
-    async function fetchAndDisplayTunnel() {
+    async function fetchTunnelData() {
+      // 1. Essai direct via Raw GitHub avec cache-buster
+      try {
+        const res = await fetch(`${RAW_URL}?_t=${Date.now()}`);
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch (e) {
+        console.warn("Raw fetch failed, trying API fallback", e);
+      }
+
+      // 2. Repli sur l'API GitHub Contents
+      try {
+        const res = await fetch(`${API_URL}&_t=${Date.now()}`);
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData.content) {
+            const rawContent = atob(apiData.content.replace(/\s/g, ''));
+            return JSON.parse(rawContent);
+          }
+        }
+      } catch (e) {
+        console.error("API fetch failed", e);
+      }
+
+      return null;
+    }
+
+    async function fetchAndDisplayTunnel(autoOpen = false) {
       const authSection = document.getElementById("authSection");
       const statusSection = document.getElementById("statusSection");
       const urlBox = document.getElementById("tunnelUrlBox");
@@ -325,12 +364,10 @@
       authSection.style.display = "none";
       statusSection.style.display = "block";
 
-      try {
-        const res = await fetch(`${GITHUB_TUNNEL_URL}?_t=${Date.now()}`);
-        if (!res.ok) throw new Error("Fichier de tunnel non trouvé");
-        const data = await res.json();
-        
-        // Extraction stricte et prioritaire du lien direct .lhr.life
+      const data = await fetchTunnelData();
+
+      if (data) {
+        // Extraction stricte et prioritaire du lien .lhr.life
         let lhr = "";
         if (data.lhrLife && data.lhrLife.includes(".lhr.life")) {
           lhr = data.lhrLife;
@@ -342,37 +379,38 @@
           const match = JSON.stringify(data).match(/https:\/\/[a-zA-Z0-9_\-\.]+\.lhr\.life/);
           if (match) lhr = match[0];
         }
-        activeTunnelUrl = lhr || data.primary || "";
+
+        activeTunnelUrl = lhr || data.primary || data.cloudflare || "";
 
         if (activeTunnelUrl) {
           urlBox.textContent = activeTunnelUrl;
           launchBtn.href = activeTunnelUrl;
           badge.className = "badge badge-online";
-          badge.innerHTML = '<span class="dot"></span> En ligne & Opérationnel (.lhr.life)';
-        } else {
-          urlBox.textContent = "Initialisation du tunnel en cours...";
-          badge.className = "badge badge-loading";
-          badge.innerHTML = '<span class="dot"></span> Initialisation...';
-          setTimeout(fetchAndDisplayTunnel, 4000);
+          badge.innerHTML = '<span class="dot"></span> En ligne (.lhr.life actif)';
+
+          if (autoOpen && activeTunnelUrl) {
+            window.open(activeTunnelUrl, '_blank', 'noopener,noreferrer');
+          }
+          return;
         }
-      } catch (err) {
-        urlBox.textContent = "En attente du lancement de la VM...";
-        badge.className = "badge badge-loading";
-        badge.innerHTML = '<span class="dot"></span> En attente...';
-        setTimeout(fetchAndDisplayTunnel, 4000);
       }
+
+      urlBox.textContent = "Initialisation du tunnel en cours...";
+      badge.className = "badge badge-loading pulse";
+      badge.innerHTML = '<span class="dot"></span> Démarrage du relais...';
+      setTimeout(() => fetchAndDisplayTunnel(false), 4000);
     }
 
     function copyUrl() {
       if (!activeTunnelUrl) return;
       navigator.clipboard.writeText(activeTunnelUrl).then(() => {
-        alert("URL copiée dans le presse-papier !");
+        alert("Adresse copiée : " + activeTunnelUrl);
       });
     }
 
     // Auto-login si déjà authentifié dans la session
     if (sessionStorage.getItem("vm_auth") === "true") {
-      fetchAndDisplayTunnel();
+      fetchAndDisplayTunnel(false);
     }
   </script>
 </body>
