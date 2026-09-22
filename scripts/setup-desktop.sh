@@ -83,8 +83,8 @@ docker exec -u 0 kasm_desktop bash -c '
   su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
   su - kasm-user -c "autocutsel -selection PRIMARY -fork >/dev/null 2>&1 || true"
 
-  # Installation officielle du paquet Google Chrome Stable
-  if ! [ -d /opt/google/chrome ]; then
+  # Installation officielle de Google Chrome Stable
+  if ! [ -f /usr/bin/google-chrome-stable ]; then
     wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
     apt-get update -qq >/dev/null 2>&1 || true
@@ -95,34 +95,29 @@ docker exec -u 0 kasm_desktop bash -c '
     }
   fi
 
-  # APPLICATION DU WRAPPER INDESTRUCTIBLE AU COEUR DU BINAIRE CHROME
-  # En modifiant directement le binaire interne /opt/google/chrome/chrome,
-  # TOUTES les invocations de Chrome (clic bureau, terminal, liens, docs)
-  # hériteront TOUJOURS de --no-sandbox et ne crasheront JAMAIS.
-  if [ -f /opt/google/chrome/chrome ] && [ ! -f /opt/google/chrome/chrome-real ]; then
-    mv /opt/google/chrome/chrome /opt/google/chrome/chrome-real
-    cat << "EOF_CHROME_BIN" > /opt/google/chrome/chrome
+  # Création d un wrapper robuste pour google-chrome
+  cat << "EOF_WRAPPER" > /usr/local/bin/google-chrome
 #!/usr/bin/env bash
-exec /opt/google/chrome/chrome-real \
+rm -rf /home/kasm-user/.config/google-chrome/Singleton* 2>/dev/null || true
+rm -rf /home/kasm-user/.config/chromium/Singleton* 2>/dev/null || true
+exec /usr/bin/google-chrome-stable \
   --no-sandbox \
+  --disable-setuid-sandbox \
   --disable-dev-shm-usage \
   --disable-gpu \
-  --password-store=basic \
   --no-first-run \
   --no-default-browser-check \
+  --password-store=basic \
   "$@"
-EOF_CHROME_BIN
-    chmod 755 /opt/google/chrome/chrome
-  fi
-
-  # Symlinks globaux
-  ln -sf /opt/google/chrome/google-chrome /usr/local/bin/google-chrome
-  ln -sf /opt/google/chrome/google-chrome /usr/local/bin/chrome
+EOF_WRAPPER
+  chmod 755 /usr/local/bin/google-chrome
+  ln -sf /usr/local/bin/google-chrome /usr/local/bin/chrome
+  ln -sf /usr/local/bin/google-chrome /usr/bin/google-chrome
 
   # Raccourci CLI pour Google Docs
   cat << "DOCS_CLI_EOF" > /usr/local/bin/google-docs
 #!/usr/bin/env bash
-exec /opt/google/chrome/google-chrome --app="https://docs.google.com" "$@"
+exec /usr/local/bin/google-chrome --app="https://docs.google.com" "$@"
 DOCS_CLI_EOF
   chmod 755 /usr/local/bin/google-docs
 
@@ -151,7 +146,7 @@ Type=Application
 Name=Google Chrome
 GenericName=Navigateur Web
 Comment=Naviguer sur Internet avec Google Chrome
-Exec=/opt/google/chrome/google-chrome %U
+Exec=/usr/local/bin/google-chrome %U
 Icon=google-chrome
 Terminal=false
 Categories=Network;WebBrowser;StartupNotify=true
@@ -166,7 +161,7 @@ Type=Application
 Name=Google Docs
 GenericName=Traitement de texte
 Comment=Créer et éditer des documents en ligne
-Exec=/opt/google/chrome/google-chrome --app=https://docs.google.com
+Exec=/usr/local/bin/google-docs
 Icon=/usr/share/icons/hicolor/scalable/apps/google-docs.svg
 Terminal=false
 Categories=Office;WordProcessor;StartupNotify=true
@@ -183,8 +178,9 @@ DESKTOP_DOCS
   # Marquage de confiance XFCE
   su - kasm-user -c "gio set /home/kasm-user/Desktop/*.desktop metadata::trusted true 2>/dev/null || true"
 
-  # Test de démarrage de Chrome pour valider qu il fonctionne
-  su - kasm-user -c "/opt/google/chrome/google-chrome --version"
+  # Test d exécution réel de Google Chrome
+  su - kasm-user -c "/usr/local/bin/google-chrome --version"
+  echo " Google Chrome validé avec succès !"
 '
 
 echo " Bureau Ubuntu configuré avec succès : Google Chrome et Google Docs 100% opérationnels !"
