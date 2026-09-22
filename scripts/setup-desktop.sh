@@ -103,18 +103,29 @@ FLAGS_EOF
   cp /home/kasm-user/.config/chrome-flags.conf /home/kasm-user/.config/chromium-flags.conf 2>/dev/null || true
 
   # ----------------------------------------------------
-  # 2. APPLICATION PAR DÉFAUT : GOOGLE ANTIGRAVITY (APPLICATION NATIVE LINUX)
+  # 2. APPLICATION PAR DÉFAUT : GOOGLE ANTIGRAVITY (DERNIÈRE VERSION OFFICIELLE)
   # ----------------------------------------------------
-  echo "Installation du paquet officiel Google Antigravity Linux (apt)..."
-  mkdir -p /etc/apt/keyrings
-  curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg 2>/dev/null || true
-  echo "deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/ antigravity-debian main" > /etc/apt/sources.list.d/antigravity.list
+  echo "Installation de la dernière version officielle Google Antigravity IDE & Hub..."
+  mkdir -p /opt/google-antigravity /opt/antigravity-hub /home/kasm-user/Desktop
 
-  apt-get update -qq || true
-  apt-get install -y --no-install-recommends antigravity || true
+  # 1. Antigravity IDE (dernière version stable officielle Google 2.x)
+  echo "Téléchargement d Antigravity IDE (dernière version 2.5.5)..."
+  curl -fsSL -o /tmp/antigravity-ide.tar.gz "https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/2.5.5-4923483625488384/linux-x64/Antigravity%20IDE.tar.gz" || true
+  if [ -f /tmp/antigravity-ide.tar.gz ]; then
+    tar -xzf /tmp/antigravity-ide.tar.gz -C /opt/google-antigravity/ --strip-components=1 2>/dev/null || tar -xzf /tmp/antigravity-ide.tar.gz -C /opt/google-antigravity/ 2>/dev/null || true
+    rm -f /tmp/antigravity-ide.tar.gz
+  fi
 
-  # Installation également du CLI officiel agy
-  echo "Installation du CLI Antigravity (agy)..."
+  # 2. Antigravity Hub v2.15.1 (version la plus récente du Hub Agentique)
+  echo "Téléchargement d Antigravity Hub (v2.15.1)..."
+  curl -fsSL -o /tmp/antigravity-hub.tar.gz "https://storage.googleapis.com/antigravity-public/antigravity-hub/2.15.1-5880727900913664/linux-x64/Antigravity.tar.gz" || true
+  if [ -f /tmp/antigravity-hub.tar.gz ]; then
+    tar -xzf /tmp/antigravity-hub.tar.gz -C /opt/antigravity-hub/ --strip-components=1 2>/dev/null || tar -xzf /tmp/antigravity-hub.tar.gz -C /opt/antigravity-hub/ 2>/dev/null || true
+    rm -f /tmp/antigravity-hub.tar.gz
+  fi
+
+  # 3. Installation CLI officiel agy
+  echo "Installation du CLI Antigravity officiel (agy)..."
   export HOME=/home/kasm-user
   curl -fsSL https://antigravity.google/cli/install.sh | bash 2>/dev/null || true
   if [ -f /home/kasm-user/.local/bin/agy ]; then
@@ -122,40 +133,39 @@ FLAGS_EOF
     cp -f /home/kasm-user/.local/bin/agy /usr/local/bin/antigravity-cli 2>/dev/null || true
   fi
 
-  # Wrapper pour exécuter Antigravity avec support conteneur
-  if command -v antigravity >/dev/null 2>&1; then
-    BIN_AG=$(which antigravity)
-    if [ ! -f /usr/bin/antigravity.bin ]; then
-      cp "$BIN_AG" /usr/bin/antigravity.bin 2>/dev/null || true
-    fi
-    cat << "ANTIGRAVITY_APP_WRAPPER" > /usr/local/bin/antigravity
+  # 4. Création des wrappers d exécution optimisés pour conteneur Docker (--no-sandbox)
+  cat << "ANTIGRAVITY_WRAPPER_EOF" > /usr/local/bin/antigravity
 #!/usr/bin/env bash
-if [ -x /usr/bin/antigravity.bin ]; then
-  exec /usr/bin/antigravity.bin --no-sandbox --disable-dev-shm-usage "$@"
-elif [ -x /usr/bin/antigravity ]; then
-  exec /usr/bin/antigravity --no-sandbox --disable-dev-shm-usage "$@"
-else
+if [ -x /opt/google-antigravity/antigravity ]; then
+  exec /opt/google-antigravity/antigravity --no-sandbox --disable-dev-shm-usage "$@"
+elif [ -x /opt/google-antigravity/bin/antigravity ]; then
+  exec /opt/google-antigravity/bin/antigravity --no-sandbox --disable-dev-shm-usage "$@"
+elif [ -x /opt/antigravity-hub/antigravity ]; then
+  exec /opt/antigravity-hub/antigravity --no-sandbox --disable-dev-shm-usage "$@"
+elif command -v agy >/dev/null 2>&1; then
   exec agy "$@"
+else
+  exec /usr/local/bin/google-chrome --app="https://antigravity.google" "$@"
 fi
-ANTIGRAVITY_APP_WRAPPER
-    chmod +x /usr/local/bin/antigravity
-  fi
+ANTIGRAVITY_WRAPPER_EOF
+  chmod +x /usr/local/bin/antigravity
   cp -f /usr/local/bin/antigravity /usr/local/bin/google-antigravity 2>/dev/null || true
 
-  # Raccourci desktop pour Antigravity
-  cat << "DESKTOP_ANTIGRAVITY_EOF" > /home/kasm-user/Desktop/google-antigravity.desktop
+  # Raccourci Bureau officiel Google Antigravity
+  cat << "DESKTOP_AG_EOF" > /home/kasm-user/Desktop/google-antigravity.desktop
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Google Antigravity
-GenericName=IDE & Plateforme IA Agentique
-Comment=Plateforme officielle de Développement Agentique Google Antigravity
+GenericName=IDE & Hub IA Agentique Google
+Comment=Derniere version officielle de l IDE et Hub IA Google Antigravity
 Exec=/usr/local/bin/antigravity %U
 Icon=antigravity
 Terminal=false
 Categories=Development;IDE;Utility;
 StartupNotify=true
-DESKTOP_ANTIGRAVITY_EOF
+DESKTOP_AG_EOF
+  chmod +x /home/kasm-user/Desktop/google-antigravity.desktop
 
   # ----------------------------------------------------
   # 3. APPLICATION PAR DÉFAUT : GOOGLE DOCS
