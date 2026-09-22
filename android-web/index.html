@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <title>Smartphone Android 13 • Plein Écran</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #000000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    /* Conteneur Plein Écran 100% */
+    #androidViewport {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      z-index: 1;
+    }
+
+    /* Iframe / Canvas intégrant le flux vidéo en plein écran sans bordure */
+    #androidFrame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      outline: none;
+      background: #000;
+      display: block;
+    }
+
+    /* Barre de contrôle flottante discrète et rétractable */
+    #controlBar {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 20, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 30px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 9999;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      transition: all 0.3s ease;
+      opacity: 0.85;
+    }
+
+    #controlBar:hover, #controlBar:active {
+      opacity: 1;
+      transform: translateX(-50%) scale(1.02);
+    }
+
+    .btn-ctrl {
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      border-radius: 50%;
+      font-size: 16px;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+
+    .btn-ctrl:active {
+      background: rgba(255, 255, 255, 0.2);
+      transform: scale(0.9);
+    }
+
+    .btn-ctrl svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    /* Écran de chargement immersif */
+    #loadingScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0a0a0c;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      transition: opacity 0.5s ease;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #10b981;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .loading-sub {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    /* Barre de gestes Android (en bas) */
+    .android-gesture-pill {
+      width: 90px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Écran de chargement -->
+  <div id="loadingScreen">
+    <div class="spinner"></div>
+    <div class="loading-title">Démarrage d'Android 13</div>
+    <div class="loading-sub">Initialisation du flux plein écran ultra-fluide...</div>
+  </div>
+
+  <!-- Zone d'affichage Android Plein Écran -->
+  <div id="androidViewport">
+    <iframe id="androidFrame" allow="autoplay; fullscreen; clipboard-read; clipboard-write; microphone; camera"></iframe>
+  </div>
+
+  <!-- Barre de commande discrète et gestes tactiles -->
+  <div id="controlBar">
+    <!-- Retour -->
+    <button class="btn-ctrl" onclick="sendKey('back')" title="Retour" aria-label="Retour">
+      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    </button>
+
+    <!-- Accueil -->
+    <button class="btn-ctrl" onclick="sendKey('home')" title="Accueil" aria-label="Accueil">
+      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    </button>
+
+    <!-- Applications Récentes -->
+    <button class="btn-ctrl" onclick="sendKey('appswitch')" title="Applications récentes" aria-label="Récents">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
+    </button>
+
+    <!-- Plein Écran Natif -->
+    <button class="btn-ctrl" onclick="toggleFullscreen()" title="Plein Écran Mobile" aria-label="Plein Écran">
+      <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+    </button>
+  </div>
+
+  <script>
+    const frame = document.getElementById("androidFrame");
+    const loader = document.getElementById("loadingScreen");
+
+    // Détection de l'hôte et du port pour le flux Android direct
+    const currentHost = window.location.host;
+    const protocol = window.location.protocol;
+
+    // Redirection directe vers le flux plein écran ws-scrcpy ou noVNC allégé
+    // Dans ws-scrcpy ou noVNC, nous injectons les paramètres autoconnect=true & resize=scale
+    const targetStreamUrl = `${protocol}//${currentHost}/stream/`;
+
+    frame.src = targetStreamUrl;
+
+    frame.onload = () => {
+      setTimeout(() => {
+        loader.style.opacity = "0";
+        setTimeout(() => loader.style.display = "none", 500);
+      }, 1000);
+    };
+
+    // Gestion du Plein Écran Mobile (iOS & Android)
+    function toggleFullscreen() {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(err => console.log(err));
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          document.documentElement.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    }
+
+    // Raccourcis clés système
+    function sendKey(key) {
+      try {
+        frame.contentWindow.postMessage({ type: "keyevent", key: key }, "*");
+      } catch (e) {
+        console.warn("Message sending failed:", e);
+      }
+    }
+
+    // Auto-masquage discret de la barre après 4 secondes d'inactivité
+    let hideTimer = null;
+    function resetHideTimer() {
+      const bar = document.getElementById("controlBar");
+      bar.style.opacity = "0.9";
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        bar.style.opacity = "0.2";
+      }, 4000);
+    }
+
+    document.addEventListener("touchstart", resetHideTimer, { passive: true });
+    document.addEventListener("mousemove", resetHideTimer, { passive: true });
+    resetHideTimer();
+  </script>
+</body>
+</html>
