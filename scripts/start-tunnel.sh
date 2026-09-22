@@ -14,16 +14,16 @@ if ! command -v cloudflared &> /dev/null; then
   rm -f /tmp/cloudflared.deb
 fi
 
-# Attente que le port 3000 réponde bien en HTTP
+# Attente que le port 3000 réponde
 for i in {1..30}; do
-  if curl -s -f http://127.0.0.1:3000/ > /dev/null 2>&1; then
-    echo " Port HTTP 3000 actif et prêt !"
+  if curl -s http://127.0.0.1:3000/ > /dev/null 2>&1 || curl -s -I http://127.0.0.1:3000/ | grep -q "HTTP"; then
+    echo " Port HTTP 3000 actif !"
     break
   fi
   sleep 1
 done
 
-# Lancement du tunnel Cloudflare
+# Lancement du tunnel Cloudflare vers HTTP 3000
 echo "Démarrage Cloudflare Tunnel vers http://127.0.0.1:3000..."
 nohup cloudflared tunnel --url http://127.0.0.1:3000 > /tmp/quick_tunnel.log 2>&1 &
 echo $! > /tmp/quick_tunnel.pid
@@ -50,27 +50,14 @@ for i in {1..15}; do
   sleep 1
 done
 
-# On ajoute autoconnect=true&resize=remote pour connexion directe immédiate
-PARAMS="vnc.html?autoconnect=true&resize=remote"
-FOUND_CF_URL=""
-FOUND_LHR_URL=""
-
-if [ -n "$RAW_CF_URL" ]; then
-  FOUND_CF_URL="$RAW_CF_URL/$PARAMS"
-fi
-
-if [ -n "$RAW_LHR_URL" ]; then
-  FOUND_LHR_URL="$RAW_LHR_URL/$PARAMS"
-fi
-
-PRIMARY_URL="$FOUND_CF_URL"
+PRIMARY_URL="$RAW_CF_URL"
 if [ -z "$PRIMARY_URL" ]; then
-  PRIMARY_URL="$FOUND_LHR_URL"
+  PRIMARY_URL="$RAW_LHR_URL"
 fi
 
 echo "=================================================="
-echo "🎯 URL CLOUDFLARE ACTIVE : $FOUND_CF_URL"
-echo "🎯 URL REPLI LOCALHOST.RUN: $FOUND_LHR_URL"
+echo "🎯 URL CLOUDFLARE ACTIVE : $RAW_CF_URL"
+echo "🎯 URL REPLI LOCALHOST.RUN: $RAW_LHR_URL"
 echo "=================================================="
 
 if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; then
@@ -88,16 +75,16 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; t
   cat << JSON > tunnels.json
 {
   "primary": "$PRIMARY_URL",
-  "cloudflare": "$FOUND_CF_URL",
-  "localhostRun": "$FOUND_LHR_URL",
+  "cloudflare": "$RAW_CF_URL",
+  "localhostRun": "$RAW_LHR_URL",
   "updated_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 }
 JSON
 
   git add current_url.txt updated_at.txt tunnels.json
-  git commit -m "chore(tunnel): active public tunnels with autoconnect [$PRIMARY_URL]" || true
+  git commit -m "chore(tunnel): active modern kasm chrome desktop [$PRIMARY_URL]" || true
   git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g' || true
   cd /
   rm -rf "$TMP_URL_REPO"
-  echo " URLs sauvegardées avec succès sur la branche tunnel-url !"
+  echo " URLs sauvegardées avec succès !"
 fi
