@@ -3,53 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Accès Bureau Virtuel Linux</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Portail Virtuel Cloud • Ubuntu & Android 13</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z'/></svg>">
   <style>
     :root {
-      --bg: #ffffff;
-      --card-bg: #ffffff;
-      --border: #e2e8f0;
-      --border-focus: #2563eb;
-      --text: #0f172a;
-      --text-muted: #64748b;
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
-      --success: #16a34a;
-      --warning: #ea580c;
-      --danger: #dc2626;
-      --radius: 12px;
+      --android-green: #10b981;
+      --android-hover: #059669;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 16px;
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     body {
       background-color: var(--bg);
       color: var(--text);
-      min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
+      min-height: 100vh;
       padding: 24px;
-      -webkit-font-smoothing: antialiased;
     }
 
     .container {
-      width: 100%;
-      max-width: 480px;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 36px 32px;
-      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06);
+      width: 100%;
+      max-width: 680px;
+      padding: 36px;
+      transition: all 0.3s ease;
     }
 
     .header {
@@ -57,33 +55,50 @@
       margin-bottom: 28px;
     }
 
+    .logo-icons {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
     .logo-icon {
       width: 52px;
       height: 52px;
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      border-radius: 12px;
-      display: inline-flex;
+      border-radius: 14px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+
+    .logo-ubuntu {
+      background: #eff6ff;
       color: var(--primary);
     }
 
-    h1 {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 6px;
+    .logo-android {
+      background: #ecfdf5;
+      color: var(--android-green);
     }
 
-    p.subtitle {
-      font-size: 14px;
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
       color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 6px;
     }
 
     .form-group {
       margin-bottom: 20px;
+      text-align: left;
     }
 
     label {
@@ -94,51 +109,55 @@
       color: var(--text);
     }
 
-    .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    input[type="password"], input[type="text"] {
+    .input-wrapper input {
       width: 100%;
-      padding: 12px 14px;
-      font-size: 16px;
+      padding: 13px 16px;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
+      font-size: 15px;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: all 0.2s ease;
     }
 
-    input:focus {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    .input-wrapper input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
     }
 
     .btn {
       width: 100%;
-      padding: 13px 20px;
-      font-size: 15px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 14px;
       font-weight: 600;
-      border-radius: 8px;
-      border: none;
       cursor: pointer;
-      display: inline-flex;
+      border: none;
+      transition: all 0.2s ease;
+      display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: all 0.2s;
       text-decoration: none;
     }
 
     .btn-primary {
       background-color: var(--primary);
-      color: #ffffff;
+      color: white;
     }
 
     .btn-primary:hover {
       background-color: var(--primary-hover);
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-android {
+      background-color: var(--android-green);
+      color: white;
+    }
+
+    .btn-android:hover {
+      background-color: var(--android-hover);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
     }
 
     .btn-secondary {
@@ -168,7 +187,7 @@
 
     .status-panel {
       display: none;
-      margin-top: 24px;
+      margin-top: 20px;
       border-top: 1px solid var(--border);
       padding-top: 20px;
     }
@@ -177,11 +196,11 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       padding: 4px 10px;
       border-radius: 20px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     .badge-online {
@@ -203,17 +222,84 @@
       background: currentColor;
     }
 
+    .vm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 580px) {
+      .vm-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .vm-card {
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 18px;
+      text-align: center;
+      background: #ffffff;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .vm-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    .vm-card.android:hover {
+      border-color: var(--android-green);
+    }
+
+    .vm-card-icon {
+      font-size: 34px;
+      margin-bottom: 8px;
+    }
+
+    .vm-card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .vm-card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
     .url-box {
       background: #f8fafc;
       border: 1px solid var(--border);
-      padding: 12px 14px;
-      border-radius: 8px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
       word-break: break-all;
+      margin-bottom: 12px;
+      color: #334155;
+      text-align: center;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sync-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
       margin-bottom: 16px;
-      color: #1e293b;
-      font-weight: 500;
     }
 
     .footer-note {
@@ -238,15 +324,23 @@
 
   <div class="container" id="mainContainer">
     <div class="header">
-      <div class="logo-icon">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-          <line x1="8" y1="21" x2="16" y2="21"></line>
-          <line x1="12" y1="17" x2="12" y2="21"></line>
-        </svg>
+      <div class="logo-icons">
+        <div class="logo-icon logo-ubuntu">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <div class="logo-icon logo-android">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+        </div>
       </div>
-      <h1>Bureau Virtuel Ubuntu</h1>
-      <p class="subtitle">Accès sécurisé à votre environnement persistant</p>
+      <h1>Portail Virtuel Cloud</h1>
+      <p class="subtitle">Accès direct temps réel aux tunnels Cloudflare (Ubuntu & Android 13)</p>
     </div>
 
     <!-- Écran de connexion -->
@@ -265,38 +359,68 @@
       <div class="alert alert-error" id="errorAlert"></div>
     </div>
 
-    <!-- Écran de connexion réussie & lancement VM -->
+    <!-- Écran de sélection des 2 VMs distinctes -->
     <div id="statusSection" class="status-panel">
-      <div id="badgeContainer">
-        <span class="badge badge-online" id="statusBadge">
-          <span class="dot"></span> En ligne (.lhr.life)
-        </span>
-      </div>
-
-      <div class="form-group">
-        <label>Lien direct d'accès :</label>
-        <div class="url-box" id="tunnelUrlBox">Récupération de l'adresse...</div>
-      </div>
-
-      <a id="launchBtn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="margin-bottom: 8px;">
-        🚀 Accéder au Bureau Virtuel
-      </a>
       
-      <button type="button" class="btn btn-secondary" onclick="copyUrl()">
-        📋 Copier l'adresse directe
+      <div class="sync-indicator">
+        <span class="dot" style="background: #10b981;"></span>
+        <span id="syncText">Synchronisation temps réel active</span>
+      </div>
+
+      <div class="vm-grid">
+        <!-- VM 1 : Linux Ubuntu Desktop -->
+        <div class="vm-card">
+          <div>
+            <div class="vm-card-icon">🖥️</div>
+            <div class="vm-card-title">Linux Ubuntu</div>
+            <div class="vm-card-desc">Google Chrome, Google Docs, Suite complète XFCE</div>
+            <div id="badgeLinuxContainer">
+              <span class="badge badge-loading pulse" id="badgeLinux">
+                <span class="dot"></span> En attente du tunnel...
+              </span>
+            </div>
+            <div class="url-box" id="urlBoxLinux">Connexion au tunnel...</div>
+          </div>
+          <a id="btnLaunchLinux" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="pointer-events: none; opacity: 0.6;">
+            🚀 Ouvrir Ubuntu
+          </a>
+        </div>
+
+        <!-- VM 2 : Smartphone Android 13 -->
+        <div class="vm-card android">
+          <div>
+            <div class="vm-card-icon">📱</div>
+            <div class="vm-card-title">Android 13</div>
+            <div class="vm-card-desc">Smartphone tactile H.264, persistance complète</div>
+            <div id="badgeAndroidContainer">
+              <span class="badge badge-loading pulse" id="badgeAndroid">
+                <span class="dot"></span> En attente du tunnel...
+              </span>
+            </div>
+            <div class="url-box" id="urlBoxAndroid">Connexion au tunnel...</div>
+          </div>
+          <a id="btnLaunchAndroid" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-android" style="pointer-events: none; opacity: 0.6;">
+            📱 Ouvrir Android
+          </a>
+        </div>
+      </div>
+      
+      <button type="button" class="btn btn-secondary" onclick="fetchBothTunnels(true)">
+        🔄 Forcer l'actualisation temps réel
       </button>
     </div>
 
     <div class="footer-note">
-      Tunnel direct SSH localhost.run & Persistance 100%
+      Tunnels Cloudflare TryCloudflare • Données synchronisées sans cache
     </div>
   </div>
 
   <script>
-    const RAW_URL = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/tunnels.json";
-    const API_URL = "https://api.github.com/repos/JeanHug/VM/contents/tunnels.json?ref=tunnel-url";
+    const API_BASE = "https://api.github.com/repos/JeanHug/VM/contents/";
+    const RAW_BASE = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/";
     const AUTH_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
-    let activeTunnelUrl = "";
+
+    let pollInterval = null;
 
     async function sha256(str) {
       const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
@@ -314,10 +438,9 @@
       btn.disabled = true;
 
       const hash = await sha256(pwd);
-
       if (hash === AUTH_HASH || pwd === "1234") {
         sessionStorage.setItem("vm_auth", "true");
-        await fetchAndDisplayTunnel(true);
+        showDashboard();
       } else {
         err.textContent = "Mot de passe incorrect.";
         err.style.display = "block";
@@ -326,91 +449,95 @@
       }
     }
 
-    async function fetchTunnelData() {
-      // 1. Essai direct via Raw GitHub avec cache-buster
-      try {
-        const res = await fetch(`${RAW_URL}?_t=${Date.now()}`);
-        if (res.ok) {
-          return await res.json();
-        }
-      } catch (e) {
-        console.warn("Raw fetch failed, trying API fallback", e);
+    function showDashboard() {
+      document.getElementById("authSection").style.display = "none";
+      document.getElementById("statusSection").style.display = "block";
+      fetchBothTunnels();
+      if (!pollInterval) {
+        pollInterval = setInterval(() => fetchBothTunnels(false), 4000);
       }
+    }
 
-      // 2. Repli sur l'API GitHub Contents
+    // Récupération 100% temps réel via API GitHub sans cache
+    async function fetchFreshFile(filename) {
       try {
-        const res = await fetch(`${API_URL}&_t=${Date.now()}`);
+        const res = await fetch(`${API_BASE}${filename}?ref=tunnel-url&_r=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Accept": "application/vnd.github.v3+json" }
+        });
         if (res.ok) {
-          const apiData = await res.json();
-          if (apiData.content) {
-            const rawContent = atob(apiData.content.replace(/\s/g, ''));
+          const data = await res.json();
+          if (data && data.content) {
+            const rawContent = atob(data.content.replace(/\s/g, ''));
             return JSON.parse(rawContent);
           }
         }
       } catch (e) {
-        console.error("API fetch failed", e);
+        console.warn(`GitHub API contents failed for ${filename}`, e);
+      }
+
+      // Fallback Raw
+      try {
+        const rawRes = await fetch(`${RAW_BASE}${filename}?_t=${Date.now()}`, { cache: "no-store" });
+        if (rawRes.ok) return await rawRes.json();
+      } catch (e) {
+        console.warn(`Raw fallback failed for ${filename}`, e);
       }
 
       return null;
     }
 
-    async function fetchAndDisplayTunnel(autoOpen = false) {
-      const authSection = document.getElementById("authSection");
-      const statusSection = document.getElementById("statusSection");
-      const urlBox = document.getElementById("tunnelUrlBox");
-      const launchBtn = document.getElementById("launchBtn");
-      const badge = document.getElementById("statusBadge");
+    async function fetchBothTunnels(manual = false) {
+      const syncText = document.getElementById("syncText");
+      if (manual && syncText) syncText.textContent = "Actualisation en cours...";
 
-      authSection.style.display = "none";
-      statusSection.style.display = "block";
+      const [dataLinux, dataAndroid] = await Promise.all([
+        fetchFreshFile("tunnels-linux.json"),
+        fetchFreshFile("tunnels-android.json")
+      ]);
 
-      const data = await fetchTunnelData();
+      // 1. Linux VM
+      const badgeLinux = document.getElementById("badgeLinux");
+      const urlBoxLinux = document.getElementById("urlBoxLinux");
+      const btnLinux = document.getElementById("btnLaunchLinux");
 
-      if (data) {
-        // Extraction stricte et prioritaire du lien .lhr.life
-        let lhr = "";
-        if (data.lhrLife && data.lhrLife.includes(".lhr.life")) {
-          lhr = data.lhrLife;
-        } else if (data.primary && data.primary.includes(".lhr.life")) {
-          lhr = data.primary;
-        } else if (data.localhostRun && data.localhostRun.includes(".lhr.life")) {
-          lhr = data.localhostRun;
-        } else {
-          const match = JSON.stringify(data).match(/https:\/\/[a-zA-Z0-9_\-\.]+\.lhr\.life/);
-          if (match) lhr = match[0];
-        }
-
-        activeTunnelUrl = lhr || data.primary || data.cloudflare || "";
-
-        if (activeTunnelUrl) {
-          urlBox.textContent = activeTunnelUrl;
-          launchBtn.href = activeTunnelUrl;
-          badge.className = "badge badge-online";
-          badge.innerHTML = '<span class="dot"></span> En ligne (.lhr.life actif)';
-
-          if (autoOpen && activeTunnelUrl) {
-            window.open(activeTunnelUrl, '_blank', 'noopener,noreferrer');
-          }
-          return;
+      if (dataLinux) {
+        const cfUrl = dataLinux.cloudflare || dataLinux.primary || dataLinux.lhrLife || "";
+        if (cfUrl) {
+          urlBoxLinux.textContent = cfUrl;
+          btnLinux.href = cfUrl;
+          btnLinux.style.pointerEvents = "auto";
+          btnLinux.style.opacity = "1";
+          badgeLinux.className = "badge badge-online";
+          badgeLinux.innerHTML = '<span class="dot"></span> En ligne (Cloudflare)';
         }
       }
 
-      urlBox.textContent = "Initialisation du tunnel en cours...";
-      badge.className = "badge badge-loading pulse";
-      badge.innerHTML = '<span class="dot"></span> Démarrage du relais...';
-      setTimeout(() => fetchAndDisplayTunnel(false), 4000);
+      // 2. Android VM
+      const badgeAndroid = document.getElementById("badgeAndroid");
+      const urlBoxAndroid = document.getElementById("urlBoxAndroid");
+      const btnAndroid = document.getElementById("btnLaunchAndroid");
+
+      if (dataAndroid) {
+        const cfUrl = dataAndroid.cloudflare || dataAndroid.primary || dataAndroid.lhrLife || "";
+        if (cfUrl) {
+          urlBoxAndroid.textContent = cfUrl;
+          btnAndroid.href = cfUrl;
+          btnAndroid.style.pointerEvents = "auto";
+          btnAndroid.style.opacity = "1";
+          badgeAndroid.className = "badge badge-online";
+          badgeAndroid.innerHTML = '<span class="dot"></span> En ligne (Cloudflare)';
+        }
+      }
+
+      if (syncText) {
+        const now = new Date();
+        syncText.textContent = `Dernière vérification temps réel : ${now.toLocaleTimeString()}`;
+      }
     }
 
-    function copyUrl() {
-      if (!activeTunnelUrl) return;
-      navigator.clipboard.writeText(activeTunnelUrl).then(() => {
-        alert("Adresse copiée : " + activeTunnelUrl);
-      });
-    }
-
-    // Auto-login si déjà authentifié dans la session
     if (sessionStorage.getItem("vm_auth") === "true") {
-      fetchAndDisplayTunnel(false);
+      showDashboard();
     }
   </script>
 </body>
