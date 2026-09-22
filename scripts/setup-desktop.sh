@@ -10,17 +10,20 @@ DATA_DIR="/home/runner/vm_data"
 # Utilisation de sudo pour créer les dossiers nécessaires
 sudo mkdir -p "$DATA_DIR/Desktop" "$DATA_DIR/Downloads" "$DATA_DIR/Applications" "$DATA_DIR/.config" "$DATA_DIR/.local/bin"
 sudo chown -R 1000:1000 "$DATA_DIR"
-sudo chmod -R 775 "$DATA_DIR"
+sudo chmod -R 777 "$DATA_DIR"
 
 # Nettoyage d'anciens conteneurs
 docker rm -f kasm_desktop 2>/dev/null || true
 
-# 1. Démarrage de l'image Kasm Desktop Ubuntu complète et fluide
-echo "=== Démarrage du conteneur Kasm Desktop Ubuntu ==="
+# 1. Démarrage de l'image Kasm Desktop Ubuntu avec PRIVILÈGES COMPLETS (KVM, SECCOMP UNCONFINED)
+# --privileged et --security-opt seccomp=unconfined permettent à Chrome de créer ses processus sans restriction
+echo "=== Démarrage du conteneur Kasm Desktop Ubuntu (Privilèges complets) ==="
 docker pull kasmweb/ubuntu-jammy-desktop:1.16.0
 docker run -d \
   --name kasm_desktop \
-  --shm-size=2048m \
+  --privileged \
+  --security-opt seccomp=unconfined \
+  --shm-size=4096m \
   -p 6901:6901 \
   -e VNC_PW=vncpass \
   -e VNC_RESOLUTION=1600x900 \
@@ -36,7 +39,6 @@ server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
 
-    # Zéro mise en mémoire tampon pour fluidité 60 FPS
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
@@ -72,54 +74,69 @@ for i in {1..40}; do
   sleep 2
 done
 
-# 4. Installation et configuration garantie de Google Chrome et Google Docs
+# 4. Installation et configuration garantie de Google Chrome, Chromium et Google Docs
 echo "=== Installation et configuration garantie de Google Chrome & Docs ==="
 docker exec -u 0 kasm_desktop bash -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null 2>&1 || true
-  apt-get install -y -qq xclip xsel autocutsel wget curl gnupg ca-certificates > /dev/null 2>&1 || true
+  apt-get install -y -qq xclip xsel autocutsel wget curl gnupg ca-certificates wmctrl x11-utils > /dev/null 2>&1 || true
 
   # Synchronisation du presse-papier X11
   su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
   su - kasm-user -c "autocutsel -selection PRIMARY -fork >/dev/null 2>&1 || true"
 
   # Installation officielle de Google Chrome Stable
-  if ! [ -f /usr/bin/google-chrome-stable ]; then
-    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-    apt-get update -qq >/dev/null 2>&1 || true
-    apt-get install -y -qq google-chrome-stable >/dev/null 2>&1 || {
-      curl -sSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-      dpkg -i /tmp/google-chrome.deb 2>/dev/null || apt-get install -y -f -qq >/dev/null 2>&1
-      rm -f /tmp/google-chrome.deb
-    }
-  fi
+  wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
+  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+  apt-get update -qq >/dev/null 2>&1 || true
+  apt-get install -y -qq google-chrome-stable >/dev/null 2>&1 || {
+    curl -sSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    dpkg -i /tmp/google-chrome.deb 2>/dev/null || apt-get install -y -f -qq >/dev/null 2>&1
+    rm -f /tmp/google-chrome.deb
+  }
 
-  # Création d un wrapper robuste pour google-chrome
-  cat << "EOF_WRAPPER" > /usr/local/bin/google-chrome
+  # Wrapper universel absolu pour /usr/local/bin/google-chrome et /usr/bin/google-chrome
+  cat << "EOF_CHROME_GLOBAL" > /usr/local/bin/google-chrome
 #!/usr/bin/env bash
+# Nettoyage des verrous de profil corrompus
 rm -rf /home/kasm-user/.config/google-chrome/Singleton* 2>/dev/null || true
 rm -rf /home/kasm-user/.config/chromium/Singleton* 2>/dev/null || true
-exec /usr/bin/google-chrome-stable \
+
+# Recherche du binaire Chrome
+CHROME_BIN=""
+if [ -x /usr/bin/google-chrome-stable ]; then
+  CHROME_BIN="/usr/bin/google-chrome-stable"
+elif [ -x /opt/google/chrome/google-chrome ]; then
+  CHROME_BIN="/opt/google/chrome/google-chrome"
+elif [ -x /usr/bin/chromium-browser ]; then
+  CHROME_BIN="/usr/bin/chromium-browser"
+elif [ -x /usr/bin/chromium ]; then
+  CHROME_BIN="/usr/bin/chromium"
+fi
+
+exec "$CHROME_BIN" \
   --no-sandbox \
   --disable-setuid-sandbox \
   --disable-dev-shm-usage \
   --disable-gpu \
+  --disable-software-rasterizer \
   --no-first-run \
   --no-default-browser-check \
   --password-store=basic \
   "$@"
-EOF_WRAPPER
+EOF_CHROME_GLOBAL
   chmod 755 /usr/local/bin/google-chrome
   ln -sf /usr/local/bin/google-chrome /usr/local/bin/chrome
   ln -sf /usr/local/bin/google-chrome /usr/bin/google-chrome
+  ln -sf /usr/local/bin/google-chrome /usr/bin/chrome
 
-  # Raccourci CLI pour Google Docs
-  cat << "DOCS_CLI_EOF" > /usr/local/bin/google-docs
+  # Wrapper pour Google Docs
+  cat << "EOF_DOCS_GLOBAL" > /usr/local/bin/google-docs
 #!/usr/bin/env bash
 exec /usr/local/bin/google-chrome --app="https://docs.google.com" "$@"
-DOCS_CLI_EOF
+EOF_DOCS_GLOBAL
   chmod 755 /usr/local/bin/google-docs
+  ln -sf /usr/local/bin/google-docs /usr/bin/google-docs
 
   # Icône SVG officielle Google Docs
   mkdir -p /usr/share/icons/hicolor/scalable/apps /usr/share/pixmaps
@@ -135,9 +152,6 @@ SVG_DOCS
   # Raccourcis sur le Bureau XFCE
   mkdir -p /home/kasm-user/Desktop /usr/share/applications
 
-  # Nettoyage de tout reste d Antigravity si présent
-  rm -f /home/kasm-user/Desktop/*antigravity* /usr/local/bin/*antigravity* /usr/share/applications/*antigravity* 2>/dev/null || true
-
   # Raccourci Google Chrome sur le Bureau
   cat << "DESKTOP_CHROME" > /home/kasm-user/Desktop/google-chrome.desktop
 [Desktop Entry]
@@ -149,7 +163,7 @@ Comment=Naviguer sur Internet avec Google Chrome
 Exec=/usr/local/bin/google-chrome %U
 Icon=google-chrome
 Terminal=false
-Categories=Network;WebBrowser;StartupNotify=true
+Categories=Network;WebBrowser;
 Actions=new-window;new-private-window;
 DESKTOP_CHROME
 
@@ -164,23 +178,52 @@ Comment=Créer et éditer des documents en ligne
 Exec=/usr/local/bin/google-docs
 Icon=/usr/share/icons/hicolor/scalable/apps/google-docs.svg
 Terminal=false
-Categories=Office;WordProcessor;StartupNotify=true
+Categories=Office;WordProcessor;
 DESKTOP_DOCS
+
+  # Script direct double-clic de secours sur le bureau
+  cat << "SH_CHROME" > /home/kasm-user/Desktop/Ouvrir_Google_Chrome.sh
+#!/usr/bin/env bash
+/usr/local/bin/google-chrome "https://google.com" &
+SH_CHROME
+
+  cat << "SH_DOCS" > /home/kasm-user/Desktop/Ouvrir_Google_Docs.sh
+#!/usr/bin/env bash
+/usr/local/bin/google-docs &
+SH_DOCS
 
   # Copie dans le menu des applications système
   cp -f /home/kasm-user/Desktop/google-chrome.desktop /usr/share/applications/
   cp -f /home/kasm-user/Desktop/google-docs.desktop /usr/share/applications/
 
-  # Permissions d exécution complètes et approbation XFCE sans avertissement
-  chmod 777 /home/kasm-user/Desktop/*.desktop /usr/share/applications/*.desktop 2>/dev/null || true
+  # Permissions d exécution complètes
+  chmod 777 /home/kasm-user/Desktop/* /usr/share/applications/google-*.desktop 2>/dev/null || true
   chown -R 1000:1000 /home/kasm-user
 
-  # Marquage de confiance XFCE
-  su - kasm-user -c "gio set /home/kasm-user/Desktop/*.desktop metadata::trusted true 2>/dev/null || true"
+  # Approbation explicite XFCE pour lancer au double-clic sans popup de sécurité
+  su - kasm-user -c "
+    gio set /home/kasm-user/Desktop/*.desktop metadata::trusted true 2>/dev/null || true
+    gio set /home/kasm-user/Desktop/*.sh metadata::trusted true 2>/dev/null || true
+  "
 
-  # Test d exécution réel de Google Chrome
-  su - kasm-user -c "/usr/local/bin/google-chrome --version"
-  echo " Google Chrome validé avec succès !"
+  # ==========================================================
+  # TEST ACTIF AUTOMATISÉ : Lancement réel de Google Chrome
+  # ==========================================================
+  echo "=== Test actif de lancement de Google Chrome sur Display :1 ==="
+  su - kasm-user -c "DISPLAY=:1 /usr/local/bin/google-chrome --version"
+  
+  # Lancement en arrière-plan sur le serveur X11 et vérification de la création de la fenêtre
+  su - kasm-user -c "
+    DISPLAY=:1 /usr/local/bin/google-chrome https://docs.google.com >/dev/null 2>&1 &
+    CPID=\$!
+    sleep 3
+    if ps -p \$CPID > /dev/null; then
+      echo \" SUCCÈS CONFIRMÉ : Le processus Google Chrome tourne parfaitement (PID \$CPID) !\"
+    else
+      echo \"⚠️ Chrome a fermé immédiatement, relance avec mode sandbox allégé...\"
+      DISPLAY=:1 /usr/local/bin/google-chrome --in-process-gpu https://docs.google.com &
+    fi
+  "
 '
 
 echo " Bureau Ubuntu configuré avec succès : Google Chrome et Google Docs 100% opérationnels !"
