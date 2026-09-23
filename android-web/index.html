@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Smartphone Android 13 - Cloud Web Edition</title>
+  <title>Smartphone Android 13 - Faible Latence 60 FPS</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <style>
     * {
@@ -39,6 +39,37 @@
       border: none;
       background: #000000;
     }
+    
+    /* Bouton d'Auto Détection Plein Écran Flottant Intelligent */
+    #autoFsBtn {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 10002;
+      background: rgba(16, 185, 129, 0.9);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 30px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: opacity 0.3s ease, transform 0.2s ease;
+    }
+    #autoFsBtn:active {
+      transform: scale(0.94);
+    }
+    #autoFsBtn.hidden-fs {
+      opacity: 0;
+      pointer-events: none;
+    }
+
     /* Barre de Contrôle et Navigation Android */
     #bottomNav {
       position: fixed;
@@ -87,10 +118,24 @@
       background: rgba(16, 185, 129, 0.2);
       color: #10b981;
       border: 1px solid rgba(16, 185, 129, 0.3);
+      position: relative;
     }
-    .kb-btn:active {
-      background: rgba(16, 185, 129, 0.4);
+    .kb-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: #10b981;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: none;
+      animation: pulse 1.2s infinite;
     }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.7; }
+    }
+
     /* Tiroir de Clavier Mobile */
     #keyboardDrawer {
       position: fixed;
@@ -175,6 +220,7 @@
     .q-key:active {
       background: #3f3f46;
     }
+
     /* Écran de Chargement */
     #loader {
       position: fixed;
@@ -210,8 +256,16 @@
   <div id="loader">
     <div class="spinner"></div>
     <div style="font-size: 17px; font-weight: 600; margin-bottom: 6px;">Connexion à Android 13</div>
-    <div style="font-size: 13px; color: #a1a1aa;">Flux Plein Écran Haute Performance (60 FPS)...</div>
+    <div style="font-size: 13px; color: #a1a1aa;">Optimisation Faible Latence 60 FPS...</div>
   </div>
+
+  <!-- Bouton Auto Détection & Plein Écran -->
+  <button id="autoFsBtn" onclick="autoDetectAndFullscreen()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+    </svg>
+    <span>Auto-Plein Écran</span>
+  </button>
 
   <!-- Conteneur Smartphone Android -->
   <div id="androidContainer">
@@ -232,12 +286,13 @@
     <button class="nav-btn" onclick="sendAndroidKey('appswitch')" title="Applications récentes">
       <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
     </button>
-    <!-- Clavier Mobile Dédié -->
-    <button class="nav-btn kb-btn" onclick="openKeyboardDrawer()" title="Saisir du texte avec votre clavier mobile">
+    <!-- Clavier Mobile Dédié avec indicateur intelligent -->
+    <button class="nav-btn kb-btn" onclick="openKeyboardDrawer()" title="Clavier">
+      <div id="kbBadge" class="kb-badge"></div>
       <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
     </button>
     <!-- Plein Écran -->
-    <button class="nav-btn" onclick="toggleFullscreen()" title="Plein Écran">
+    <button class="nav-btn" onclick="autoDetectAndFullscreen()" title="Plein Écran">
       <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
     </button>
   </div>
@@ -253,7 +308,7 @@
       <button class="q-key" onclick="sendAndroidKey('power')">⏻ Écran On/Off</button>
     </div>
     <div class="kb-row">
-      <input type="text" id="kbInput" placeholder="Tapez votre texte ici..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <input type="text" id="kbInput" placeholder="Saisissez votre texte..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <button class="kb-action-btn" onclick="submitText(false)">Envoyer</button>
       <button class="kb-action-btn" style="background:#059669;" onclick="submitText(true)">Envoyer + ⏎</button>
       <button class="kb-close-btn" onclick="closeKeyboardDrawer()">✕</button>
@@ -266,17 +321,73 @@
     const kbDrawer = document.getElementById('keyboardDrawer');
     const kbInput = document.getElementById('kbInput');
     const bottomNav = document.getElementById('bottomNav');
+    const autoFsBtn = document.getElementById('autoFsBtn');
+    const kbBadge = document.getElementById('kbBadge');
 
-    // Connexion automatique au flux noVNC avec mise à l'échelle automatique
-    const streamUrl = `/vnc.html?autoconnect=true&resize=scale&quality=8&compression=2&show_dot=false&bell=false`;
+    // Connexion optimisée au flux noVNC sans latence
+    const streamUrl = `/vnc.html?autoconnect=true&resize=scale&quality=8&compression=0&show_dot=false&bell=false`;
     frame.src = streamUrl;
 
     frame.onload = () => {
       setTimeout(() => {
         loader.style.opacity = '0';
         setTimeout(() => loader.style.display = 'none', 400);
-      }, 800);
+      }, 600);
     };
+
+    // Auto-Détection de l'écran & Passage en Plein Écran
+    function autoDetectAndFullscreen() {
+      const doc = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (doc.requestFullscreen) {
+          doc.requestFullscreen().catch(() => {});
+        } else if (doc.webkitRequestFullscreen) {
+          doc.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+    function handleFullscreenChange() {
+      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      if (isFs) {
+        autoFsBtn.classList.add('hidden-fs');
+      } else {
+        autoFsBtn.classList.remove('hidden-fs');
+      }
+    }
+
+    // Auto-Détection du Clavier Android (Polling léger & réactif)
+    let lastKeyboardState = false;
+    async function checkAndroidKeyboardState() {
+      try {
+        const res = await fetch('/api/keyboard-state');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.keyboardVisible && !lastKeyboardState) {
+            // Un champ de texte nécessite le clavier dans Android -> ouverture automatique
+            openKeyboardDrawer();
+            kbBadge.style.display = 'block';
+          } else if (!data.keyboardVisible && lastKeyboardState) {
+            kbBadge.style.display = 'none';
+          }
+          lastKeyboardState = data.keyboardVisible;
+        }
+      } catch (e) {
+        // En cas de micro coupure réseau
+      }
+    }
+
+    // Vérifier l'état du clavier Android toutes les 1.2 secondes
+    setInterval(checkAndroidKeyboardState, 1200);
 
     // Fonctions Clavier Mobile
     function openKeyboardDrawer() {
@@ -327,31 +438,20 @@
       }
     }
 
-    // Gestion Plein Écran Mobile
-    function toggleFullscreen() {
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        } else if (document.documentElement.webkitRequestFullscreen) {
-          document.documentElement.webkitRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        }
-      }
-    }
-
     // Auto-masquage discret de la barre après inactivité
     let navTimeout = null;
     function resetNavTimer() {
       bottomNav.style.opacity = '0.9';
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        autoFsBtn.style.opacity = '1';
+      }
       clearTimeout(navTimeout);
       navTimeout = setTimeout(() => {
         if (kbDrawer.style.display !== 'flex') {
           bottomNav.style.opacity = '0.25';
+          if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            autoFsBtn.style.opacity = '0.35';
+          }
         }
       }, 4000);
     }
