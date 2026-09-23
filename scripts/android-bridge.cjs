@@ -76,8 +76,6 @@ const server = http.createServer(async (req, res) => {
         const text = data.text || url.searchParams.get('t') || '';
         
         if (text) {
-          // Format text for ADB shell input text or clipboard
-          // Using base64/escaped input or character by character
           const escaped = text.replace(/[%]/g, '%25')
                               .replace(/[ ]/g, '%s')
                               .replace(/[&]/g, '\\&')
