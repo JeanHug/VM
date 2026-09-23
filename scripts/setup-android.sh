@@ -3,7 +3,7 @@ set -e
 
 echo "=================================================="
 echo "    ANDROID GRAPHICAL SMARTPHONE (PORTRAIT 720x1280)"
-echo "        Moteur Graphique VirtIO-GPU / KMS         "
+echo "   Software Rendering + Auto-Provisioning Launcher  "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_oreo_data"
@@ -33,14 +33,21 @@ if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
   curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
 fi
 
-# 4. Extraction des composants
-echo "=== 2. Extraction du noyau et du système de fichiers ==="
+# 4. Extraction des composants de boot
+echo "=== 2. Extraction du noyau et du système ==="
 mkdir -p "$DATA_DIR/android_fs"
 7z x -y "$ISO_NAME" -o"$DATA_DIR/android_fs" >/dev/null 2>&1 || true
 
-# Partition système ext4 contenant les fichiers Android
+# Partition de données ext4 native Android-x86 (data.img)
+if [ ! -f "data.img" ]; then
+  echo "Création de la partition de données ext4 (data.img)..."
+  qemu-img create -f raw data.img 4G
+  mkfs.ext4 -F -L "data" data.img >/dev/null 2>&1 || true
+fi
+
+# Partition système ext4 combinée
 if [ ! -f "android_disk.img" ]; then
-  echo "Création de la partition ext4 Android..."
+  echo "Création de la partition système Android..."
   qemu-img create -f raw android_disk.img 6G
   mkfs.ext4 -F -L "AndroidOS" android_disk.img >/dev/null 2>&1 || true
   
@@ -48,8 +55,7 @@ if [ ! -f "android_disk.img" ]; then
   sudo mkdir -p "$MOUNT_DIR"
   sudo mount -o loop android_disk.img "$MOUNT_DIR"
   sudo cp -r "$DATA_DIR/android_fs/"* "$MOUNT_DIR/" 2>/dev/null || true
-  sudo mkdir -p "$MOUNT_DIR/data"
-  sudo chmod 777 "$MOUNT_DIR/data"
+  sudo cp "$DATA_DIR/data.img" "$MOUNT_DIR/data.img" 2>/dev/null || true
   sudo umount "$MOUNT_DIR" || true
   sudo rm -rf "$MOUNT_DIR"
 fi
@@ -63,18 +69,19 @@ else
   KVM_FLAG="-cpu max"
 fi
 
-# 6. Démarrage QEMU avec VirtIO-GPU (KMS natif Linux/Android) en mode Portrait
-echo "=== 3. Démarrage QEMU Android (VirtIO-GPU KMS / 720x1280) ==="
+# 6. Démarrage QEMU (3.5 Go RAM, Rendu VESA software 720x1280, HWACCEL=0)
+echo "=== 3. Démarrage QEMU Android (Portrait 720x1280 VESA Software) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
-  -m 2048 \
+  -m 3584 \
   -smp 2 \
-  -vga virtio \
+  -vga std \
+  -global VGA.vgamem_mb=64 \
   -vnc 127.0.0.1:0 \
   -kernel "$DATA_DIR/android_fs/kernel" \
   -initrd "$DATA_DIR/android_fs/initrd.img" \
   -drive file="$DATA_DIR/android_disk.img",format=raw,if=virtio \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data video=720x1280 DPI=280 quiet" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data.img UVESA_MODE=720x1280 DPI=280 HWACCEL=0 nomodeset xforcevesa quiet" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
@@ -95,7 +102,7 @@ fi
 node "$CURRENT_DIR/scripts/android-bridge.cjs" >/dev/null 2>&1 &
 sleep 1
 
-# 9. Configuration NGINX
+# 9. Configuration NGINX Reverse-Proxy
 echo "=== 5. Configuration NGINX ==="
 sudo mkdir -p /var/www/android-web
 sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
@@ -156,23 +163,35 @@ for i in {1..20}; do
   sleep 2
 done
 
-# Configuration post-boot ADB en arrière-plan
+# 11. Auto-Provisioning ADB & Déverrouillage automatique du Launcher
 (
-  for attempt in {1..40}; do
+  echo "Attente de l'initialisation ADB..."
+  for attempt in {1..50}; do
     sleep 3
     adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+    
+    # Envoi périodique de déverrouillage pour réveiller SystemServer / Zygote
+    adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
+    
     BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null || echo "0")
     if [ "$BOOT_OK" = "1" ]; then
-      echo "=== ANDROID BOOT TERMINE AVEC SUCCES ==="
+      echo "=== ANDROID BOOT COMPLET EFFECTUE ==="
+      # Contournement de l'assistant de configuration initiale
+      adb -s 127.0.0.1:5555 shell settings put global device_provisioned 1 >/dev/null 2>&1 || true
+      adb -s 127.0.0.1:5555 shell settings put secure user_setup_complete 1 >/dev/null 2>&1 || true
+      # Configuration écran, rotation et Launcher
       adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
       adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
       adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
       adb -s 127.0.0.1:5555 shell wm density 280 >/dev/null 2>&1 || true
+      # Aller sur l'écran d'accueil
+      adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
       break
     fi
   done
 ) >/dev/null 2>&1 &
 
 echo "=================================================="
-echo " Android Graphique VirtIO-GPU Prêt (Port 3000) !"
+echo " Android Graphique Prêt (Port 3000) !"
 echo "=================================================="
