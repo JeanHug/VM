@@ -7,11 +7,11 @@ const PORT = 8080;
 
 function runAdb(cmd) {
   return new Promise((resolve) => {
-    exec(`adb -s 127.0.0.1:5555 ${cmd}`, { timeout: 5000 }, (err, stdout, stderr) => {
+    exec(`adb -s 127.0.0.1:5555 ${cmd}`, { timeout: 4000 }, (err, stdout, stderr) => {
       if (err) {
-        resolve({ success: false, error: err.message, stderr });
+        resolve({ success: false, error: err.message, stderr: String(stderr) });
       } else {
-        resolve({ success: true, stdout: stdout.trim() });
+        resolve({ success: true, stdout: (stdout || '').trim() });
       }
     });
   });
@@ -43,7 +43,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // API: Keyevent (Back: 4, Home: 3, AppSwitch: 187, Power: 26, VolUp: 24, VolDown: 25, Enter: 66, Tab: 61, Backspace: 67)
+  // API: Auto-detection du Clavier Android (IME visible / champ texte ciblé)
+  if (url.pathname === '/api/keyboard-state') {
+    try {
+      // 1. Vérifier si l'IME virtuel d'Android demande à être affiché
+      const imeRes = await runAdb('shell dumpsys input_method');
+      const imeOut = imeRes.stdout || '';
+      const isInputShown = imeOut.includes('mInputShown=true') || 
+                           imeOut.includes('mServedInputConnection=true') || 
+                           imeOut.includes('mCurMethodId=');
+
+      // 2. Vérifier si la fenêtre active possède le focus sur un champ éditable
+      const winRes = await runAdb('shell dumpsys window displays');
+      const winOut = winRes.stdout || '';
+      const isImeWindow = winOut.includes('InputMethod') || winOut.includes('mCurrentFocus=');
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        keyboardVisible: isInputShown,
+        inputFocused: isImeWindow,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ keyboardVisible: false, error: e.message }));
+    }
+    return;
+  }
+
+  // API: Keyevent (Back, Home, AppSwitch, Power, etc.)
   if (url.pathname === '/api/key') {
     const key = url.searchParams.get('k') || '4';
     const keyMap = {
@@ -66,7 +94,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // API: Type text with full mobile keyboard support (spaces, characters, emojis)
+  // API: Type text
   if (url.pathname === '/api/type') {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -102,34 +130,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // API: Touch / Tap
-  if (url.pathname === '/api/tap') {
-    const x = parseInt(url.searchParams.get('x') || '0', 10);
-    const y = parseInt(url.searchParams.get('y') || '0', 10);
-    const result = await runAdb(`shell input tap ${x} ${y}`);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(result));
-    return;
-  }
-
-  // API: Swipe
-  if (url.pathname === '/api/swipe') {
-    const x1 = parseInt(url.searchParams.get('x1') || '0', 10);
-    const y1 = parseInt(url.searchParams.get('y1') || '0', 10);
-    const x2 = parseInt(url.searchParams.get('x2') || '0', 10);
-    const y2 = parseInt(url.searchParams.get('y2') || '0', 10);
-    const ms = parseInt(url.searchParams.get('ms') || '300', 10);
-    const result = await runAdb(`shell input swipe ${x1} ${y1} ${x2} ${y2} ${ms}`);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(result));
-    return;
-  }
-
-  // Default fallback
+  // Fallback
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found');
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Android Bridge API running on 127.0.0.1:${PORT}`);
+  console.log(`Android Bridge API with Keyboard Detection running on 127.0.0.1:${PORT}`);
 });
