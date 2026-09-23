@@ -5,7 +5,18 @@ echo "=================================================="
 echo "  DÉMARRAGE DU TUNNEL CLOUDFLARE POUR VM ANDROID  "
 echo "=================================================="
 
-# 1. Installation de Cloudflared si nécessaire
+# 1. Vérification que NGINX tourne bien sur le port 3000
+echo "Attente que le port local 3000 soit actif..."
+for i in {1..30}; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+    echo " Port local 3000 opérationnel (Code $HTTP_CODE) !"
+    break
+  fi
+  sleep 2
+done
+
+# 2. Installation de Cloudflared si nécessaire
 if ! command -v cloudflared &>/dev/null; then
   echo "Installation de Cloudflared..."
   sudo curl -L --output /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -13,18 +24,18 @@ if ! command -v cloudflared &>/dev/null; then
 fi
 
 # Nettoyage des anciens tunnels
-pkill -f cloudflared || true
-pkill -f "nokey@localhost.run" || true
+pkill -9 -f cloudflared || true
+pkill -9 -f "nokey@localhost.run" || true
 
-# 2. Lancement du tunnel Cloudflare (Port 3000 -> Android Web)
+# 3. Lancement du tunnel Cloudflare (Port 3000 -> Android Web)
 echo "Lancement du Quick Tunnel Cloudflare pour Android..."
 cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate > /tmp/quick_tunnel_android.log 2>&1 &
 
-# 3. Lancement de localhost.run en secours
+# 4. Lancement de localhost.run en secours
 echo "Lancement de localhost.run pour Android..."
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -R 80:localhost:3000 nokey@localhost.run > /tmp/localhost_run_android.log 2>&1 &
 
-# 4. Récupération des URLs
+# 5. Récupération des URLs
 RAW_CF_URL=""
 for i in {1..40}; do
   RAW_CF_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/quick_tunnel_android.log | head -n1 || true)
@@ -53,21 +64,24 @@ echo "🎯 URL CLOUDFLARE ANDROID : $RAW_CF_URL"
 echo "🎯 URL PRINCIPALE ANDROID : $PRIMARY_URL"
 echo "=================================================="
 
-# 5. Publication de l'URL sur la branche tunnel-url (tunnels-android.json)
+# 6. Publication de l'URL sur la branche tunnel-url (tunnels-android.json)
 if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; then
   TMP_URL_REPO=$(mktemp -d)
   cd "$TMP_URL_REPO"
-  git init
-  git config user.name "VM-Tunnel-Auto"
-  git config user.email "bot@vm.tunnel.local"
+  git init -q
+  git config user.name "VM-Android-Auto"
+  git config user.email "bot@vm.android.local"
   git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
   git checkout -B tunnel-url
-  
+
   git pull origin tunnel-url --rebase 2>/dev/null || true
+
+  echo "$PRIMARY_URL" > current_url_android.txt
+  echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > updated_at_android.txt
 
   cat << JSON > tunnels-android.json
 {
-  "name": "Smartphone Android",
+  "name": "Smartphone Android 14",
   "primary": "$PRIMARY_URL",
   "cloudflare": "$RAW_CF_URL",
   "lhrLife": "$RAW_LHR_URL",
@@ -76,10 +90,12 @@ if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ] && [ -n "$PRIMARY_URL" ]; t
 }
 JSON
 
-  git add tunnels-android.json
-  git commit -m "chore(tunnel): active Cloudflare Android URL [$PRIMARY_URL]" || true
-  git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g' || true
+  git add current_url_android.txt updated_at_android.txt tunnels-android.json
+  if ! git diff --staged --quiet; then
+    git commit -m "chore(tunnel-android): update URL [$(date -u +'%Y-%m-%d %H:%M:%S UTC')]"
+    git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g'
+    echo " URL Android publiée sur tunnel-url !"
+  fi
   cd /
   rm -rf "$TMP_URL_REPO"
-  echo " URL Cloudflare Android publiée avec succès sur tunnel-url !"
 fi
