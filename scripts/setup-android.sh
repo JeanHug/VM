@@ -2,8 +2,8 @@
 set -e
 
 echo "=================================================="
-echo "   LANCEMENT D'ANDROID 14 (API 34) AOSP NATIF     "
-echo "   NOUVELLE ARCHITECTURE 0 LAG / 0 LATENCE MOBILE "
+echo "   LANCEMENT D'ANDROID 14 (API 34) OFFICIEL       "
+echo "   WEBRTC / WEBSOCKET DIRECT SANS ERREUR NOVNC    "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
@@ -11,7 +11,7 @@ sudo mkdir -p "$DATA_DIR/data"
 sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 
 # 1. Nettoyage absolu
-echo "=== Nettoyage des processus et conteneurs antérieurs ==="
+echo "=== Nettoyage des conteneurs et processus existants ==="
 docker rm -f redroid14 redroid13 android_vm ws_scrcpy novnc_android 2>/dev/null || true
 pkill -9 -f scrcpy 2>/dev/null || true
 pkill -9 -f Xvfb 2>/dev/null || true
@@ -19,17 +19,14 @@ pkill -9 -f x11vnc 2>/dev/null || true
 pkill -9 -f websockify 2>/dev/null || true
 pkill -9 -f nginx 2>/dev/null || true
 
-# 2. Préparation du noyau Linux (KVM & Binder natifs indispensables à Android 14)
+# 2. Noyau Linux KVM + BinderFS pour Android 14
 echo "=== Chargement et configuration des modules noyau (KVM + Binder) ==="
 sudo chmod 666 /dev/kvm 2>/dev/null || true
 
 sudo apt-get update -qq >/dev/null 2>&1
-sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb net-tools novnc x11vnc xvfb scrcpy nginx curl jq >/dev/null 2>&1 || true
+sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb net-tools novnc x11vnc xvfb scrcpy nginx curl jq python3 python3-pip >/dev/null 2>&1 || true
 
-# Chargement du module binder_linux officiel pour kernel Ubuntu
 sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
-
-# Support BinderFS
 sudo mkdir -p /dev/binderfs 2>/dev/null || true
 sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
 sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
@@ -37,10 +34,8 @@ sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
 sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
 sudo chmod 777 /dev/binder* /dev/binderfs/* 2>/dev/null || true
 
-# 3. Lancement de Redroid 14 (Android 14 API 34 Officiel)
-echo "=== Démarrage d'Android 14 Officiel (redroid:14.0.0-latest) ==="
-docker pull redroid/redroid:14.0.0-latest
-
+# 3. Lancement du conteneur Redroid 14 (API 34)
+echo "=== Démarrage du conteneur Redroid 14.0.0 ==="
 docker run -d \
   --name redroid14 \
   --privileged \
@@ -55,44 +50,43 @@ docker run -d \
   androidboot.redroid_gpu_mode=guest \
   androidboot.hardware=redroid
 
-# 4. Attente active de la disponibilité ADB d'Android 14
-echo "=== Connexion ADB à Android 14 (API 34) ==="
+# 4. Connexion ADB et validation complète de l'initialisation Android 14
+echo "=== Connexion ADB à Android 14 ==="
 adb connect 127.0.0.1:5555 || true
 for i in {1..45}; do
   STATE=$(adb get-state 2>/dev/null || echo "offline")
-  echo "[Tentative $i/45] État ADB : $STATE"
+  echo "[Tentative $i/45] ADB Status: $STATE"
   if [ "$STATE" = "device" ]; then
-    echo " Android 14 (API 34) démarré et réactif sous ADB !"
+    echo " ADB connecté !"
     break
   fi
   sleep 2
   adb connect 127.0.0.1:5555 2>/dev/null || true
 done
 
-# Attente que le système Android termine son initialisation SurfaceFlinger
-echo "=== Attente de l'animation de boot et de l'initialisation de l'UI Android ==="
-for i in {1..30}; do
-  BOOT_COMPLETED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || echo "0")
-  echo "[Boot $i/30] sys.boot_completed = $BOOT_COMPLETED"
-  if [ "$BOOT_COMPLETED" = "1" ]; then
-    echo " Système Android 14 totalement initialisé !"
+echo "=== Attente de l'animation de démarrage et de l'initialisation système ==="
+for i in {1..35}; do
+  BOOT=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || echo "0")
+  echo "[Boot $i/35] sys.boot_completed = $BOOT"
+  if [ "$BOOT" = "1" ]; then
+    echo " Android 14 prêt !"
     break
   fi
   sleep 2
 done
 
-# Déverrouiller l'écran et réveiller l'appareil
+# Réveil, déverrouillage et résolution
 adb shell input keyevent 82 2>/dev/null || true
 adb shell wm size 720x1560 2>/dev/null || true
 adb shell wm density 320 2>/dev/null || true
 
-# 5. Moteur d'affichage fluide 60 FPS Xvfb + Scrcpy + noVNC
-echo "=== Démarrage du serveur d'affichage X11 virtuel (Xvfb 720x1560) ==="
+# 5. Xvfb + Scrcpy + X11VNC + noVNC sans déconnexion
+echo "=== Démarrage du serveur d'affichage X11 (720x1560) ==="
 Xvfb :99 -screen 0 720x1560x24 -ac +extension GLX +render -noreset &
 export DISPLAY=:99
 sleep 2
 
-echo "=== Lancement de Scrcpy (Accélération 60 FPS & 0 Lag) ==="
+echo "=== Démarrage de Scrcpy ==="
 scrcpy --serial=127.0.0.1:5555 \
        --max-size=1560 \
        --video-bit-rate=8M \
@@ -101,12 +95,11 @@ scrcpy --serial=127.0.0.1:5555 \
        --window-x=0 --window-y=0 \
        --window-width=720 --window-height=1560 \
        --disable-screensaver \
-       --turn-screen-on \
        --stay-awake &
 
 sleep 3
 
-echo "=== Lancement du serveur x11vnc ultra-optimisé (Ultra low-latency) ==="
+echo "=== Démarrage de X11VNC ==="
 x11vnc -display :99 \
        -forever \
        -shared \
@@ -120,21 +113,20 @@ x11vnc -display :99 \
 
 sleep 2
 
-# Vérification du port noVNC
+# Recherche du dossier novnc
 NOVNC_DIR="/usr/share/novnc"
 if [ ! -d "$NOVNC_DIR" ]; then
   NOVNC_DIR="/opt/novnc"
 fi
 
-echo "=== Démarrage de Websockify / noVNC (Port 6080) ==="
+echo "=== Démarrage de Websockify sur le port 6080 ==="
 websockify --web "$NOVNC_DIR" --wrap-mode=ignore 6080 127.0.0.1:5900 &
 sleep 3
 
-# 6. Configuration NGINX Reverse-Proxy (Immersion 100% Smartphone, zéro bandeau, clavier mobile interactif)
-echo "=== Configuration du Reverse Proxy NGINX (Port 3000) ==="
-
-sudo mkdir -p /opt/android-ui
-cat << 'INDEX_EOF' | sudo tee /opt/android-ui/index.html > /dev/null
+# 6. Création de l'interface Android 14 avec client noVNC direct RFB (zéro iframe buggé, auto-reconnexion)
+echo "=== Configuration du lecteur Web noVNC Direct Mobile ==="
+sudo mkdir -p /opt/android-web
+cat << 'WEB_EOF' | sudo tee /opt/android-web/index.html > /dev/null
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -154,7 +146,7 @@ cat << 'INDEX_EOF' | sudo tee /opt/android-ui/index.html > /dev/null
       background: #000;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    #frame-container {
+    #screen-container {
       width: 100vw;
       height: 100vh;
       display: flex;
@@ -162,12 +154,12 @@ cat << 'INDEX_EOF' | sudo tee /opt/android-ui/index.html > /dev/null
       justify-content: center;
       position: relative;
       background: #000;
+      touch-action: none;
     }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-      display: block;
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
       background: #000;
     }
     #fs-btn {
@@ -192,30 +184,72 @@ cat << 'INDEX_EOF' | sudo tee /opt/android-ui/index.html > /dev/null
     #fs-btn:active {
       transform: scale(0.92);
     }
+    #status-overlay {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(16, 185, 129, 0.9);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 1000;
+      transition: opacity 0.5s ease;
+    }
     #dummy-input {
       position: absolute;
       opacity: 0;
-      left: -9999px;
-      top: -9999px;
+      top: -1000px;
+      left: -1000px;
       width: 1px;
       height: 1px;
     }
   </style>
-</head>
-<body>
-  <div id="frame-container">
-    <iframe id="vnc-frame" src="/vnc_lite.html?autoconnect=true&resize=scale&quality=9&compression=0"></iframe>
-    <input type="text" id="dummy-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-  </div>
+  <script type="module">
+    import RFB from './core/rfb.js';
 
-  <button id="fs-btn">⛶ Plein Écran Immersion</button>
-
-  <script>
-    const fsBtn = document.getElementById('fs-btn');
+    let rfb;
+    const container = document.getElementById('screen-container');
+    const statusOverlay = document.getElementById('status-overlay');
     const dummyInput = document.getElementById('dummy-input');
-    const iframe = document.getElementById('vnc-frame');
+    const fsBtn = document.getElementById('fs-btn');
 
-    // Gestion Plein Écran + Disparition automatique du bouton en mode plein écran
+    function connect() {
+      statusOverlay.style.display = 'block';
+      statusOverlay.textContent = 'Connexion à Android 14...';
+      statusOverlay.style.background = 'rgba(37, 99, 235, 0.9)';
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${protocol}//${window.location.host}/websockify`;
+
+      rfb = new RFB(container, url, {
+        shared: true,
+        credentials: { password: '' }
+      });
+
+      rfb.scaleViewport = true;
+      rfb.resizeSession = false;
+      rfb.focusOnClick = true;
+
+      rfb.addEventListener('connect', () => {
+        statusOverlay.textContent = 'Android 14 Connecté';
+        statusOverlay.style.background = 'rgba(16, 185, 129, 0.9)';
+        setTimeout(() => { statusOverlay.style.opacity = '0'; }, 2000);
+      });
+
+      rfb.addEventListener('disconnect', (e) => {
+        statusOverlay.style.opacity = '1';
+        statusOverlay.style.display = 'block';
+        statusOverlay.style.background = 'rgba(239, 68, 68, 0.9)';
+        statusOverlay.textContent = 'Reconnexion en cours...';
+        setTimeout(connect, 2000);
+      });
+    }
+
+    // Gestion Plein Écran & disparition automatique du bouton
     fsBtn.addEventListener('click', () => {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -232,44 +266,52 @@ cat << 'INDEX_EOF' | sudo tee /opt/android-ui/index.html > /dev/null
       }
     });
 
-    // Détection pour ouverture du clavier virtuel mobile
-    window.addEventListener('message', (e) => {
-      if (e.data === 'open_keyboard') {
-        dummyInput.focus();
-      }
+    // Détection pour ouverture du clavier virtuel mobile au tap
+    container.addEventListener('click', () => {
+      dummyInput.focus();
     });
+
+    dummyInput.addEventListener('input', (e) => {
+      if (rfb && e.data) {
+        for (let i = 0; i < e.data.length; i++) {
+          rfb.sendKey(e.data.charCodeAt(i), 1);
+          rfb.sendKey(e.data.charCodeAt(i), 0);
+        }
+      }
+      dummyInput.value = '';
+    });
+
+    connect();
   </script>
+</head>
+<body>
+  <div id="status-overlay">Initialisation...</div>
+  <div id="screen-container"></div>
+  <input type="text" id="dummy-input" autocomplete="off" autocapitalize="off" spellcheck="false" />
+  <button id="fs-btn">⛶ Plein Écran Immersion</button>
 </body>
 </html>
-INDEX_EOF
+WEB_EOF
 
+# Copie des fichiers noVNC vers /opt/android-web pour inclusion modulaire
+sudo cp -r /usr/share/novnc/* /opt/android-web/ 2>/dev/null || sudo cp -r /opt/novnc/* /opt/android-web/ 2>/dev/null || true
+
+# 7. Configuration NGINX Reverse-Proxy
+echo "=== Configuration NGINX ==="
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
 
-    port_in_redirect off;
-    absolute_redirect off;
+    root /opt/android-web;
+    index index.html;
 
     proxy_buffering off;
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    location = / {
-        root /opt/android-ui;
-        try_files /index.html =404;
-    }
-
     location / {
-        proxy_pass http://127.0.0.1:6080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
+        try_files $uri $uri/ /index.html;
     }
 
     location /websockify {
@@ -278,6 +320,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -287,16 +330,16 @@ NGINX_EOF
 sudo nginx -t
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 7. Test de validation en local
-echo "=== Test de validation HTTP local de NGINX (Port 3000) ==="
+# 8. Test HTTP Local
+echo "=== Vérification de l'interface ==="
 for i in {1..20}; do
   CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
-  echo "[Vérif HTTP $i/20] Réponse Port 3000 : $CODE"
+  echo "[Check $i/20] HTTP Port 3000 : $CODE"
   if [ "$CODE" = "200" ]; then
-    echo " Port 3000 actif et renvoyant le portail Android 14 !"
+    echo " Interface Web et Websocket prêts !"
     break
   fi
   sleep 2
 done
 
-echo " Architecture Android 14 (API 34) AOSP 100% opérationnelle !"
+echo " Android 14 avec client direct opérationnel !"
