@@ -18,7 +18,10 @@ pkill -9 -f nginx 2>/dev/null || true
 # 2. Noyau Linux KVM + BinderFS pour Android 14
 echo "=== 2. Activation des modules KVM & BinderFS ==="
 sudo chmod 666 /dev/kvm 2>/dev/null || true
-sudo apt-get update -qq >/dev/null 2>&1
+
+# Réparation des dépôts APT corrompus sur le runner avant tout apt-get
+sudo rm -f /etc/apt/sources.list.d/hashicorp.list 2>/dev/null || true
+sudo apt-get update -qq >/dev/null 2>&1 || true
 sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb net-tools nginx curl jq >/dev/null 2>&1 || true
 
 sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
@@ -97,9 +100,10 @@ for i in {1..40}; do
 done
 
 # 7. Lancement de scrcpy à l'intérieur du conteneur Kasm
-echo "=== Installation et lancement de scrcpy ==="
+echo "=== Configuration et lancement de scrcpy ==="
 docker exec -u 0 android_vnc bash -c "
   export DEBIAN_FRONTEND=noninteractive
+  rm -f /etc/apt/sources.list.d/hashicorp.list 2>/dev/null || true
   apt-get update -qq >/dev/null 2>&1 || true
   apt-get install -y -qq adb scrcpy >/dev/null 2>&1 || true
 "
