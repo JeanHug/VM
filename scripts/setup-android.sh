@@ -3,7 +3,7 @@ set -e
 
 echo "=================================================="
 echo "    ANDROID GRAPHICAL SMARTPHONE (PORTRAIT 720x1280)"
-echo "   Amorçage Direct Ultra-Optimisé VESA / Software  "
+echo "        Moteur Graphique VirtIO-GPU / KMS         "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_oreo_data"
@@ -19,8 +19,8 @@ pkill -9 -f nginx 2>/dev/null || true
 pkill -9 -f android-bridge 2>/dev/null || true
 pkill -9 -f adb 2>/dev/null || true
 
-# 2. Installation des dépendances
-echo "=== 1. Installation des dépendances système ==="
+# 2. Installation des paquets
+echo "=== 1. Installation des paquets ==="
 sudo apt-get update -qq >/dev/null 2>&1 || true
 sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full squashfs-tools e2fsprogs >/dev/null 2>&1 || true
 
@@ -33,15 +33,15 @@ if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
   curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
 fi
 
-# 4. Extraction et préparation de la partition système bootable
-echo "=== 2. Préparation du système de fichiers Android ==="
+# 4. Extraction des composants
+echo "=== 2. Extraction du noyau et du système de fichiers ==="
 mkdir -p "$DATA_DIR/android_fs"
 7z x -y "$ISO_NAME" -o"$DATA_DIR/android_fs" >/dev/null 2>&1 || true
 
-# Création du disque système amorçable avec les données
+# Partition système ext4 contenant les fichiers Android
 if [ ! -f "android_disk.img" ]; then
-  echo "Création de la partition système ext4..."
-  qemu-img create -f raw android_disk.img 5G
+  echo "Création de la partition ext4 Android..."
+  qemu-img create -f raw android_disk.img 6G
   mkfs.ext4 -F -L "AndroidOS" android_disk.img >/dev/null 2>&1 || true
   
   MOUNT_DIR="/tmp/mnt_android"
@@ -54,7 +54,7 @@ if [ ! -f "android_disk.img" ]; then
   sudo rm -rf "$MOUNT_DIR"
 fi
 
-# 5. Détection KVM matériel
+# 5. Détection KVM
 KVM_FLAG=""
 if [ -e /dev/kvm ]; then
   sudo chmod 666 /dev/kvm 2>/dev/null || true
@@ -63,31 +63,30 @@ else
   KVM_FLAG="-cpu max"
 fi
 
-# 6. Démarrage de QEMU Android (Mode Portrait 720x1280 + Rendu Graphique VESA / Software)
-echo "=== 3. Démarrage QEMU Android (720x1280 Portrait VESA) ==="
+# 6. Démarrage QEMU avec VirtIO-GPU (KMS natif Linux/Android) en mode Portrait
+echo "=== 3. Démarrage QEMU Android (VirtIO-GPU KMS / 720x1280) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
   -m 2048 \
   -smp 2 \
-  -vga std \
-  -global VGA.vgamem_mb=32 \
+  -vga virtio \
   -vnc 127.0.0.1:0 \
   -kernel "$DATA_DIR/android_fs/kernel" \
   -initrd "$DATA_DIR/android_fs/initrd.img" \
   -drive file="$DATA_DIR/android_disk.img",format=raw,if=virtio \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data UVESA_MODE=720x1280 DPI=280 nomodeset xforcevesa quiet" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data video=720x1280 DPI=280 quiet" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
   -daemonize
 
 # 7. Relais Websockify vers QEMU VNC (:0 -> 6080)
-echo "=== 4. Démarrage Websockify (127.0.0.1:5900 -> 6080) ==="
+echo "=== 4. Démarrage Websockify ==="
 sleep 2
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 >/dev/null 2>&1 &
 sleep 2
 
-# 8. Démarrage du bridge ADB
+# 8. Bridge ADB
 CURRENT_DIR=$(pwd)
 WORK_DIR="/home/runner/work/VM/VM"
 if [ -d "$WORK_DIR" ]; then
@@ -96,7 +95,7 @@ fi
 node "$CURRENT_DIR/scripts/android-bridge.cjs" >/dev/null 2>&1 &
 sleep 1
 
-# 9. Configuration NGINX Reverse-Proxy
+# 9. Configuration NGINX
 echo "=== 5. Configuration NGINX ==="
 sudo mkdir -p /var/www/android-web
 sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
@@ -147,8 +146,7 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 10. Validation HTTP locale
-echo "=== 6. Validation du serveur Web Android ==="
+# 10. Validation HTTP
 for i in {1..20}; do
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
   if [ "$HTTP_CODE" = "200" ]; then
@@ -158,15 +156,14 @@ for i in {1..20}; do
   sleep 2
 done
 
-# Attente initiale du démon ADB
+# Configuration post-boot ADB en arrière-plan
 (
-  for attempt in {1..30}; do
+  for attempt in {1..40}; do
     sleep 3
     adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
     BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null || echo "0")
     if [ "$BOOT_OK" = "1" ]; then
       echo "=== ANDROID BOOT TERMINE AVEC SUCCES ==="
-      # Configuration du format vertical et désactivation de l'écran de veille
       adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
       adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
       adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
@@ -177,5 +174,5 @@ done
 ) >/dev/null 2>&1 &
 
 echo "=================================================="
-echo " Android Graphique Prêt (Port 3000 Ouvert) !"
+echo " Android Graphique VirtIO-GPU Prêt (Port 3000) !"
 echo "=================================================="
