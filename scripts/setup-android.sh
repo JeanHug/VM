@@ -2,83 +2,105 @@
 set -e
 
 echo "=================================================="
-echo "    ANDROID 8.1 OREO DIRECT BOOT GRAPHICAL UI     "
-echo "  (Format Smartphone Portrait 720x1280 - 60 FPS)  "
+echo "    ANDROID 8.1 OREO DIRECT BOOT - FORMAT PORTRAIT"
+echo "  (Native Redroid Container + Hardware 60 FPS)    "
 echo "=================================================="
 
-DATA_DIR="/home/runner/android_oreo_data"
-sudo mkdir -p "$DATA_DIR"
-sudo chown -R runner:docker "$DATA_DIR" 2>/dev/null || sudo chown -R $(id -u):$(id -g) "$DATA_DIR" 2>/dev/null || true
-sudo chmod -R 777 "$DATA_DIR"
-cd "$DATA_DIR"
+# 1. Configuration des modules de noyau Binder pour Android
+echo "=== Chargement des modules Binder & Ashmem ==="
+sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
+sudo modprobe ashmem_linux 2>/dev/null || true
 
-# 1. Nettoyage
-pkill -9 -f qemu-system 2>/dev/null || true
+# Montage du système de fichiers Binder si nécessaire
+if [ ! -d "/dev/binderfs" ]; then
+  sudo mkdir -p /dev/binderfs
+  sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
+  sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
+  sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
+  sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
+fi
+
+# Permissions sur les périphériques
+sudo chmod 666 /dev/binder* /dev/ashmem* /dev/binderfs/* 2>/dev/null || true
+
+# 2. Nettoyage des anciens processus
+pkill -9 -f scrcpy 2>/dev/null || true
 pkill -9 -f websockify 2>/dev/null || true
-pkill -9 -f nginx 2>/dev/null || true
+pkill -9 -f Xvfb 2>/dev/null || true
+pkill -9 -f x11vnc 2>/dev/null || true
+docker rm -f redroid_vm android_oreo 2>/dev/null || true
 
-# 2. Installation des paquets
-echo "=== Installation des dépendances ==="
+# 3. Installation des outils requis (Scrcpy, Xvfb, x11vnc, noVNC, websockify, NGINX)
+echo "=== Installation des outils graphiques & Scrcpy ==="
 sudo apt-get update -qq >/dev/null 2>&1 || true
-sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full squashfs-tools >/dev/null 2>&1 || true
+sudo apt-get install -y -qq adb scrcpy xvfb x11vnc websockify novnc nginx curl wget >/dev/null 2>&1 || true
 
-# 3. Téléchargement d'Android-x86 8.1 r6 Oreo
-ISO_NAME="android-x86_64-8.1-r6.iso"
-if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
-  rm -f "$ISO_NAME"
-  echo "Téléchargement de l'image ISO Android 8.1 Oreo..."
-  curl -L -s -o "$ISO_NAME" "https://mirrors.dotsrc.org/osdn/android-x86/71931/android-x86_64-8.1-r6.iso" || \
-  curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
-fi
+# 4. Lancement du conteneur natif Android 8.1 Oreo calibré en Portrait 720x1280
+echo "=== Démarrage d'Android 8.1 Oreo (720x1280, 280 DPI, 60 fps) ==="
+docker run -d --privileged \
+  --name android_oreo \
+  -v /dev/binderfs:/dev/binderfs \
+  -v /dev/binder:/dev/binder \
+  -v /dev/hwbinder:/dev/hwbinder \
+  -v /dev/vndbinder:/dev/vndbinder \
+  -v /data:/data \
+  -p 5555:5555 \
+  redroid/redroid:8.1.0-latest \
+  androidboot.redroid_width=720 \
+  androidboot.redroid_height=1280 \
+  androidboot.redroid_dpi=280 \
+  androidboot.redroid_fps=60 \
+  androidboot.use_memfd=1 \
+  androidboot.redroid_gpu_mode=guest
 
-# 4. Extraction complète de l'arborescence Android pour boot direct sans shell
-mkdir -p "$DATA_DIR/android_fs"
-7z x -y "$ISO_NAME" -o"$DATA_DIR/android_fs" >/dev/null 2>&1 || true
+# 5. Attente de la fin du démarrage Android (boot_completed)
+echo "=== Attente du démarrage complet d'Android (sys.boot_completed=1) ==="
+adb connect 127.0.0.1:5555 || true
+for i in {1..30}; do
+  BOOT=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || echo "0")
+  if [ "$BOOT" = "1" ]; then
+    echo " Android 8.1 Oreo a terminé son boot avec succès !"
+    break
+  fi
+  sleep 2
+done
 
-# Disque virtuel de données persistantes (Data partition)
-if [ ! -f "data.img" ]; then
-  echo "Création de la partition de données persistantes Android (data.img)..."
-  qemu-img create -f raw data.img 4G
-  mkfs.ext4 -F -L "data" data.img >/dev/null 2>&1 || true
-fi
+# Désactivation des animations et configuration du déverrouillage
+adb -s 127.0.0.1:5555 shell settings put global window_animation_scale 0.5 2>/dev/null || true
+adb -s 127.0.0.1:5555 shell settings put global transition_animation_scale 0.5 2>/dev/null || true
+adb -s 127.0.0.1:5555 shell settings put global animator_duration_scale 0.5 2>/dev/null || true
+adb -s 127.0.0.1:5555 shell input keyevent 82 2>/dev/null || true # Unlock screen
 
-# 5. Détection KVM
-KVM_FLAG=""
-if [ -e /dev/kvm ]; then
-  sudo chmod 666 /dev/kvm 2>/dev/null || true
-  KVM_FLAG="-enable-kvm -cpu host"
-else
-  KVM_FLAG="-cpu max"
-fi
-
-# 6. Démarrage de QEMU avec boot direct Android SurfaceFlinger / Launcher
-# Configuration :
-# -vga std ou -vga virtio avec UVESA_MODE portrait 720x1280
-# Paramètres du kernel : androidboot.hardware=android_x86 androidboot.selinux=permissive DATA=/dev/sdb DEBUG=0 quiet
-echo "=== Lancement de la VM Android 8.1 Oreo (Launcher Graphique Direct) ==="
-qemu-system-x86_64 \
-  $KVM_FLAG \
-  -m 2048 \
-  -smp 2 \
-  -vga std \
-  -vnc :0 \
-  -kernel "$DATA_DIR/android_fs/kernel" \
-  -initrd "$DATA_DIR/android_fs/initrd.img" \
-  -drive file="$DATA_DIR/data.img",format=raw,if=virtio,index=0 \
-  -drive file="$DATA_DIR/$ISO_NAME",format=raw,if=ide,index=1,media=cdrom \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive SRC=/ DATA=/dev/vda UVESA_MODE=720x1280 DPI=280 vga=788 quiet AUTO_LOAD=old_pc_graphics" \
-  -net nic,model=virtio \
-  -net user,hostfwd=tcp::5555-:5555 \
-  -usb -device usb-tablet \
-  -daemonize
-
-# 7. Relais Websockify vers QEMU VNC (:0 -> 6080)
-echo "=== Démarrage websockify (127.0.0.1:5900 -> 6080) ==="
+# 6. Démarrage de l'affichage X11 virtuel en Portrait 720x1280 exact
+echo "=== Lancement du serveur d'affichage Xvfb (720x1280x24) ==="
+export DISPLAY=:99
+Xvfb :99 -screen 0 720x1280x24 -ac +extension GLX +render -noreset &
 sleep 2
+
+# Lancement de Scrcpy plein cadre dans l'écran 720x1280
+echo "=== Lancement du miroir Scrcpy vers le serveur X ==="
+scrcpy -s 127.0.0.1:5555 \
+  --window-title="Android Oreo" \
+  --window-x=0 --window-y=0 \
+  --window-width=720 --window-height=1280 \
+  --window-borderless \
+  --max-fps=60 \
+  --video-bit-rate=8M \
+  --turn-screen-off \
+  --stay-awake &
+sleep 2
+
+# 7. Serveur VNC x11vnc configuré pour diffuser exactement la surface 720x1280
+echo "=== Lancement de x11vnc sur :99 (port 5900) ==="
+x11vnc -display :99 -forever -shared -nopw -rfbport 5900 -quiet -bg
+sleep 1
+
+# 8. Websockify reliant VNC 5900 vers le port 6080
+echo "=== Lancement de websockify (port 6080 -> 5900) ==="
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 &
-sleep 2
+sleep 1
 
-# 8. Démarrage Bridge ADB
+# 9. Bridge ADB pour le clavier direct et les touches
 CURRENT_DIR=$(pwd)
 WORK_DIR="/home/runner/work/VM/VM"
 if [ -d "$WORK_DIR" ]; then
@@ -87,7 +109,7 @@ fi
 node "$CURRENT_DIR/scripts/android-bridge.cjs" &
 sleep 1
 
-# 9. Configuration NGINX Reverse-Proxy
+# 10. Configuration NGINX Reverse-Proxy
 echo "=== Configuration NGINX ==="
 sudo mkdir -p /var/www/android-web
 sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
@@ -102,12 +124,14 @@ server {
     proxy_request_buffering off;
     tcp_nodelay on;
 
+    # Interface Web Android 8.1 Oreo Smartphone
     location / {
         root /var/www/android-web;
         index index.html;
         try_files $uri $uri/ @novnc_proxy;
     }
 
+    # API ADB / Touch / Key
     location /api/ {
         proxy_pass http://127.0.0.1:8080/api/;
         proxy_http_version 1.1;
@@ -116,6 +140,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
+    # Flux noVNC WebSockets
     location /websockify {
         proxy_pass http://127.0.0.1:6080/websockify;
         proxy_http_version 1.1;
@@ -126,6 +151,7 @@ server {
         proxy_send_timeout 86400s;
     }
 
+    # Proxy noVNC direct
     location @novnc_proxy {
         proxy_pass http://127.0.0.1:6080;
         proxy_http_version 1.1;
@@ -138,16 +164,16 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 10. Boucle de validation
+# 11. Validation du port 3000
 for i in {1..20}; do
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
   if [ "$HTTP_CODE" = "200" ]; then
-    echo " Serveur Web Android 8.1 QEMU VNC opérationnel (HTTP 200) !"
+    echo " Serveur Web Android 8.1 Oreo opérationnel (HTTP 200) !"
     break
   fi
   sleep 2
 done
 
 echo "=================================================="
-echo " Android 8.1 Oreo Launcher Graphique Prêt !"
+echo " Android 8.1 Oreo Smartphone GUI Prêt !"
 echo "=================================================="
