@@ -2,42 +2,110 @@
 set -e
 
 echo "=================================================="
-echo "    CONFIGURATION ANDROID 13 OFFICIEL (BUDTMO)    "
-echo "  Mode Normal par Défaut + Injection Auto-Detect  "
+echo "    ANDROID 8.1 OREO NATIF AOSP ULTRA-RAPIDE      "
+echo "    (Zéro Latence - 60 FPS - Mode Normal/Détecté) "
 echo "=================================================="
 
-DATA_DIR="/home/runner/android_vm_data"
+DATA_DIR="/home/runner/vm_data_android"
 sudo mkdir -p "$DATA_DIR/data"
-sudo chown -R 1000:1000 "$DATA_DIR" 2>/dev/null || true
-sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
+sudo chmod -R 777 "$DATA_DIR"
 
-# 1. Nettoyage complet
-docker rm -f android_vm redroid13 ws_scrcpy 2>/dev/null || true
+# 1. Nettoyage
+docker rm -f redroid8 redroid13 android_vm 2>/dev/null || true
 pkill -9 -f nginx 2>/dev/null || true
+pkill -9 -f Xvfb 2>/dev/null || true
+pkill -9 -f scrcpy 2>/dev/null || true
+pkill -9 -f x11vnc 2>/dev/null || true
+pkill -9 -f websockify 2>/dev/null || true
 
-# 2. Activation KVM
-sudo chmod 666 /dev/kvm 2>/dev/null || true
+# 2. Chargement des modules Binder & KVM du noyau Linux
+echo "=== Chargement des pilotes noyau Linux (Binder & KVM) ==="
+sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
+sudo mkdir -p /dev/binderfs 2>/dev/null || true
+sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
+for node in binder hwbinder vndbinder; do
+  if [ -e "/dev/binderfs/$node" ] && [ ! -e "/dev/$node" ]; then
+    sudo ln -s "/dev/binderfs/$node" "/dev/$node" 2>/dev/null || true
+  fi
+  if [ -e "/dev/$node" ]; then
+    sudo chmod 666 "/dev/$node" 2>/dev/null || true
+  fi
+done
 
-# 3. Démarrage de l'émulateur officiel avec skin & contrôles d'origine
-echo "=== Démarrage du conteneur budtmo/docker-android ==="
-docker pull budtmo/docker-android:emulator_11.0
+if [ -e "/dev/kvm" ]; then
+  sudo chmod 666 /dev/kvm 2>/dev/null || true
+fi
+
+# 3. Démarrage de Redroid 8.1.0 (Android 8.1 Oreo Officiel AOSP natif)
+echo "=== Démarrage d'Android 8.1 Oreo (redroid/redroid:8.1.0-latest) ==="
+docker pull redroid/redroid:8.1.0-latest
 docker run -d \
-  --name android_vm \
+  --name redroid8 \
   --privileged \
-  --device /dev/kvm \
-  -p 6080:6080 \
-  -p 5554:5554 \
+  -v "$DATA_DIR/data":/data \
   -p 5555:5555 \
-  -e DEVICE="Samsung Galaxy S10" \
-  -e WEB_VNC=true \
-  -e WEB_PORT=6080 \
-  budtmo/docker-android:emulator_11.0
+  redroid/redroid:8.1.0-latest \
+  androidboot.redroid_width=720 \
+  androidboot.redroid_height=1440 \
+  androidboot.redroid_dpi=320 \
+  androidboot.redroid_fps=60 \
+  androidboot.redroid_gpu_mode=guest
 
-# 4. Configuration NGINX Reverse-Proxy
-# - Par défaut : Affiche l'écran normal complet avec le cadre / boutons comme avant
-# - Injection du script & bouton "Mode Détecté / Plein Écran" et détection du clavier
-echo "=== Configuration du reverse-proxy NGINX ==="
-sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
+# 4. Installation des paquets d'affichage ultra-rapides
+echo "=== Installation des composants d'affichage et streaming ==="
+sudo apt-get update -qq >/dev/null 2>&1 || true
+sudo apt-get install -y -qq adb xvfb x11vnc novnc websockify scrcpy nginx curl >/dev/null 2>&1 || true
+
+# 5. Connexion ADB et attente du boot rapide d'Android 8.1
+echo "=== Connexion ADB au système Android 8.1 Oreo ==="
+adb connect 127.0.0.1:5555 || true
+for i in {1..35}; do
+  BOOT_COMPLETED=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')
+  if [ "$BOOT_COMPLETED" = "1" ]; then
+    echo " Android 8.1 Oreo démarré et 100% opérationnel !"
+    break
+  fi
+  echo "Initialisation Oreo [$i/35]..."
+  sleep 2
+done
+
+# Déverrouiller et stabiliser
+adb -s 127.0.0.1:5555 shell input keyevent 82 2>/dev/null || true
+
+# 6. Démarrage Xvfb 720x1440 + Scrcpy 60 FPS + x11vnc sans aucun délai
+echo "=== Démarrage de la chaîne graphique 60 FPS ==="
+Xvfb :99 -screen 0 720x1440x24 -nocursor &
+sleep 2
+
+export DISPLAY=:99
+scrcpy -s 127.0.0.1:5555 \
+  --window-title="Android8Screen" \
+  --window-x=0 --window-y=0 \
+  --window-width=720 --window-height=1440 \
+  --video-bit-rate=8M \
+  --max-fps=60 \
+  --stay-awake \
+  --render-driver=software &
+sleep 3
+
+x11vnc -display :99 -nopw -forever -shared -repeat -rfbport 5900 -noxrecord -noxdamage -wait 0 -defer 0 &
+sleep 2
+
+websockify --web /usr/share/novnc 6080 127.0.0.1:5900 &
+sleep 2
+
+# 7. Démarrage de l'API Bridge Android
+echo "=== Démarrage de l'API Bridge Android ==="
+pkill -f android-bridge.cjs 2>/dev/null || true
+CURRENT_DIR=$(pwd)
+node "$CURRENT_DIR/scripts/android-bridge.cjs" &
+sleep 1
+
+# 8. Configuration NGINX Reverse-Proxy
+echo "=== Configuration du Reverse-Proxy NGINX ==="
+sudo mkdir -p /var/www/android-web
+sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
+sudo chmod -R 755 /var/www/android-web
 
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
@@ -48,124 +116,56 @@ server {
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Injection HTML/JS dynamique dans noVNC
+    # Interface Web Android 8.1 (Mode Normal Smartphone avec cadre + bouton Détection Plein Écran)
     location / {
-        proxy_pass http://127.0.0.1:6080;
+        root /var/www/android-web;
+        index index.html;
+        try_files $uri $uri/ @novnc_proxy;
+    }
+
+    # API Bridge Android (Détection clavier, saisie, touches matérielles)
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Flux noVNC WebSockets
+    location /websockify {
+        proxy_pass http://127.0.0.1:6080/websockify;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
+    }
 
-        sub_filter_types text/html;
-        sub_filter '</head>' '
-        <style>
-          /* Bouton de bascule Mode Détecté / Normal */
-          #detectModeToggleBtn {
-            position: fixed;
-            top: 14px;
-            right: 14px;
-            z-index: 999999;
-            background: rgba(16, 185, 129, 0.95);
-            color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 30px;
-            padding: 8px 16px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            backdrop-filter: blur(8px);
-            transition: all 0.25s ease;
-          }
-          #detectModeToggleBtn:hover {
-            background: rgba(5, 150, 105, 1);
-            transform: scale(1.03);
-          }
-          /* Mode Détecté / Plein Écran Automatique */
-          body.detected-fullscreen-mode {
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: hidden !important;
-            background: #000000 !important;
-          }
-          body.detected-fullscreen-mode #noVNC_control_bar_anchor,
-          body.detected-fullscreen-mode #noVNC_control_bar {
-            display: none !important;
-          }
-          body.detected-fullscreen-mode #noVNC_container,
-          body.detected-fullscreen-mode #noVNC_canvas {
-            width: 100vw !important;
-            height: 100vh !important;
-            object-fit: contain !important;
-          }
-        </style>
-        <script>
-          document.addEventListener("DOMContentLoaded", function() {
-            var btn = document.createElement("button");
-            btn.id = "detectModeToggleBtn";
-            btn.innerHTML = "🔍 Auto-Détection / Plein Écran";
-            btn.onclick = function() {
-              var isDetected = document.body.classList.toggle("detected-fullscreen-mode");
-              if (isDetected) {
-                btn.innerHTML = "📱 Mode Normal (Cadre)";
-                btn.style.background = "rgba(59, 130, 246, 0.95)";
-                if (document.documentElement.requestFullscreen) {
-                  document.documentElement.requestFullscreen().catch(function(){});
-                }
-              } else {
-                btn.innerHTML = "🔍 Auto-Détection / Plein Écran";
-                btn.style.background = "rgba(16, 185, 129, 0.95)";
-                if (document.fullscreenElement && document.exitFullscreen) {
-                  document.exitFullscreen().catch(function(){});
-                }
-              }
-            };
-            document.body.appendChild(btn);
-
-            // Gestion de sortie du plein écran via touche Échap
-            document.addEventListener("fullscreenchange", function() {
-              if (!document.fullscreenElement && document.body.classList.contains("detected-fullscreen-mode")) {
-                document.body.classList.remove("detected-fullscreen-mode");
-                btn.innerHTML = "🔍 Auto-Détection / Plein Écran";
-                btn.style.background = "rgba(16, 185, 129, 0.95)";
-              }
-            });
-          });
-        </script>
-        </head>';
-        sub_filter_once on;
+    # Proxy noVNC direct (fichiers vnc.html, scripts, etc.)
+    location @novnc_proxy {
+        proxy_pass http://127.0.0.1:6080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
     }
 }
 NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 5. Boucle de validation active de l'accès Web Android
-echo "=== Validation active du serveur Web Android ==="
-ANDROID_READY=false
-for i in {1..45}; do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:6080/ || echo "000")
-  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-    echo " Serveur Web Android opérationnel (HTTP $HTTP_CODE) !"
-    ANDROID_READY=true
+# 9. Validation active
+for i in {1..20}; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo " Serveur Web Android 8.1 opérationnel (HTTP 200) !"
     break
   fi
-  echo "En attente du démarrage Web Android... ($i/45 - HTTP $HTTP_CODE)"
-  sleep 3
+  sleep 2
 done
 
-if [ "$ANDROID_READY" = false ]; then
-  echo "⚠️ Avertissement : Le serveur Web Android prend plus de temps à s'initialiser."
-fi
-
 echo "=================================================="
-echo " VM Android prête et accessible en mode normal !"
+echo " Android 8.1 Oreo Prêt sur Port 3000 !"
 echo "=================================================="
