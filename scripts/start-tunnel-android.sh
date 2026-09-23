@@ -23,26 +23,37 @@ if ! command -v cloudflared &>/dev/null; then
   sudo chmod +x /usr/local/bin/cloudflared
 fi
 
-# Nettoyage des anciens tunnels
+# Nettoyage des anciens processus
 pkill -9 -f cloudflared || true
 pkill -9 -f "nokey@localhost.run" || true
 
-# 3. Lancement du tunnel Cloudflare (Port 3000 -> Android Web)
-echo "Lancement du Quick Tunnel Cloudflare pour Android..."
+# 3. Lancement du tunnel Cloudflare avec tunnel persistant (si CLOUDFLARE_TOKEN présent) ou Quick Tunnel avec log détaillé
+if [ -n "$CLOUDFLARE_TOKEN" ]; then
+  echo "Lancement du tunnel Cloudflare officiel persistant via Token..."
+  cloudflared tunnel run --token "$CLOUDFLARE_TOKEN" > /tmp/cf_tunnel_android.log 2>&1 &
+fi
+
+echo "Lancement du Quick Tunnel Cloudflare..."
 cloudflared tunnel --url http://127.0.0.1:3000 --no-autoupdate > /tmp/quick_tunnel_android.log 2>&1 &
 
-# 4. Lancement de localhost.run en secours
-echo "Lancement de localhost.run pour Android..."
+# 4. Lancement de localhost.run comme secours
+echo "Lancement de localhost.run..."
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -R 80:localhost:3000 nokey@localhost.run > /tmp/localhost_run_android.log 2>&1 &
 
-# 5. Récupération des URLs
+# 5. Récupération de l'URL Cloudflare avec validation active
 RAW_CF_URL=""
-for i in {1..40}; do
+for i in {1..50}; do
   RAW_CF_URL=$(grep -o 'https://[-a-zA-Z0-9_.]*\.trycloudflare\.com' /tmp/quick_tunnel_android.log | head -n1 || true)
   if [ -n "$RAW_CF_URL" ]; then
-    break
+    echo "URL Cloudflare détectée : $RAW_CF_URL"
+    # Vérification que Cloudflare répond bien en 200/302
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$RAW_CF_URL" || echo "000")
+    if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ]; then
+      echo " Tunnel Cloudflare testé et validé (Code $STATUS) !"
+      break
+    fi
   fi
-  sleep 1
+  sleep 2
 done
 
 RAW_LHR_URL=""
@@ -92,9 +103,9 @@ JSON
 
   git add current_url_android.txt updated_at_android.txt tunnels-android.json
   if ! git diff --staged --quiet; then
-    git commit -m "chore(tunnel-android): update URL [$(date -u +'%Y-%m-%d %H:%M:%S UTC')]"
+    git commit -m "chore(tunnel-android): active Cloudflare Android URL [$PRIMARY_URL]"
     git push --force origin tunnel-url 2>&1 | sed 's/'"$GH_TOKEN"'/REDACTED/g'
-    echo " URL Android publiée sur tunnel-url !"
+    echo " URL Android publiée avec succès sur tunnel-url !"
   fi
   cd /
   rm -rf "$TMP_URL_REPO"
