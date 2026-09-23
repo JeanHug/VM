@@ -2,107 +2,110 @@
 set -e
 
 echo "=================================================="
-echo "    ANDROID 8.1 OREO NATIF AOSP ULTRA-RAPIDE      "
-echo "    (Zéro Latence - 60 FPS - Mode Normal/Détecté) "
+echo "    ANDROID 8.1 OREO QEMU VNC DIRECT STREAM       "
+echo "  (-vnc :0, -vga qxl, nomodeset xforcevesa)       "
 echo "=================================================="
 
-DATA_DIR="/home/runner/vm_data_android"
-sudo mkdir -p "$DATA_DIR/data"
-sudo chmod -R 777 "$DATA_DIR"
+DATA_DIR="/home/runner/android_oreo_data"
+sudo mkdir -p "$DATA_DIR"
+cd "$DATA_DIR"
 
-# 1. Nettoyage
-docker rm -f redroid8 redroid13 android_vm 2>/dev/null || true
-pkill -9 -f nginx 2>/dev/null || true
-pkill -9 -f Xvfb 2>/dev/null || true
-pkill -9 -f scrcpy 2>/dev/null || true
-pkill -9 -f x11vnc 2>/dev/null || true
+# 1. Nettoyage des processus antérieurs
+pkill -9 -f qemu-system 2>/dev/null || true
 pkill -9 -f websockify 2>/dev/null || true
+pkill -9 -f nginx 2>/dev/null || true
+docker rm -f redroid8 redroid13 android_vm 2>/dev/null || true
 
-# 2. Chargement des modules Binder & KVM du noyau Linux
-echo "=== Chargement des pilotes noyau Linux (Binder & KVM) ==="
-sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
-sudo mkdir -p /dev/binderfs 2>/dev/null || true
-sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
-for node in binder hwbinder vndbinder; do
-  if [ -e "/dev/binderfs/$node" ] && [ ! -e "/dev/$node" ]; then
-    sudo ln -s "/dev/binderfs/$node" "/dev/$node" 2>/dev/null || true
-  fi
-  if [ -e "/dev/$node" ]; then
-    sudo chmod 666 "/dev/$node" 2>/dev/null || true
-  fi
-done
+# 2. Installation des paquets nécessaires (QEMU, websockify, novnc, nginx, adb)
+echo "=== Installation de QEMU & noVNC ==="
+sudo apt-get update -qq >/dev/null 2>&1 || true
+sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full >/dev/null 2>&1 || true
 
-if [ -e "/dev/kvm" ]; then
-  sudo chmod 666 /dev/kvm 2>/dev/null || true
+# 3. Téléchargement de l'image ISO Android-x86 8.1 Oreo (ou extraction kernel/initrd/system)
+echo "=== Téléchargement d'Android-x86 8.1 r6 Oreo ==="
+ISO_NAME="android-x86_64-8.1-r6.iso"
+if [ ! -f "$ISO_NAME" ]; then
+  wget -q --show-progress -O "$ISO_NAME" "https://osdn.net/projects/android-x86/downloads/71931/android-x86_64-8.1-r6.iso" || \
+  wget -q --show-progress -O "$ISO_NAME" "https://mirrors.dotsrc.org/osdn/android-x86/71931/android-x86_64-8.1-r6.iso" || \
+  wget -q --show-progress -O "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
 fi
 
-# 3. Démarrage de Redroid 8.1.0 (Android 8.1 Oreo Officiel AOSP natif)
-echo "=== Démarrage d'Android 8.1 Oreo (redroid/redroid:8.1.0-latest) ==="
-docker pull redroid/redroid:8.1.0-latest
-docker run -d \
-  --name redroid8 \
-  --privileged \
-  -v "$DATA_DIR/data":/data \
-  -p 5555:5555 \
-  redroid/redroid:8.1.0-latest \
-  androidboot.redroid_width=720 \
-  androidboot.redroid_height=1440 \
-  androidboot.redroid_dpi=320 \
-  androidboot.redroid_fps=60 \
-  androidboot.redroid_gpu_mode=guest
+# Création du disque virtuel persistant de 8GB
+if [ ! -f "android8.qcow2" ]; then
+  qemu-img create -f qcow2 android8.qcow2 8G
+fi
 
-# 4. Installation des paquets d'affichage ultra-rapides
-echo "=== Installation des composants d'affichage et streaming ==="
-sudo apt-get update -qq >/dev/null 2>&1 || true
-sudo apt-get install -y -qq adb xvfb x11vnc novnc websockify scrcpy nginx curl >/dev/null 2>&1 || true
+# Extraction pour boot direct rapide du kernel & system
+mkdir -p iso_extract
+7z x -y "$ISO_NAME" -oiso_extract >/dev/null 2>&1 || true
 
-# 5. Connexion ADB et attente du boot rapide d'Android 8.1
-echo "=== Connexion ADB au système Android 8.1 Oreo ==="
-adb connect 127.0.0.1:5555 || true
-for i in {1..35}; do
-  BOOT_COMPLETED=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')
-  if [ "$BOOT_COMPLETED" = "1" ]; then
-    echo " Android 8.1 Oreo démarré et 100% opérationnel !"
-    break
-  fi
-  echo "Initialisation Oreo [$i/35]..."
-  sleep 2
-done
+# 4. Détection KVM pour accélération matérielle
+KVM_FLAG=""
+if [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
+  echo " KVM détecté et activé pour accélération matérielle maximale !"
+  KVM_FLAG="-enable-kvm -cpu host"
+else
+  echo "⚠️ KVM non disponible, mode CPU standard x86_64"
+  KVM_FLAG="-cpu max"
+fi
 
-# Déverrouiller et stabiliser
-adb -s 127.0.0.1:5555 shell input keyevent 82 2>/dev/null || true
+# 5. Démarrage de QEMU Android 8.1 avec les paramètres exacts :
+# - -vnc :0 (écoute sur 127.0.0.1:5900)
+# - -vga qxl (carte graphique vidéo fluide)
+# - nomodeset xforcevesa UVESA_MODE=720x1440 DPI=320 au kernel
+echo "=== Lancement du moteur QEMU Android 8.1 avec VNC :0 & QXL ==="
 
-# 6. Démarrage Xvfb 720x1440 + Scrcpy 60 FPS + x11vnc sans aucun délai
-echo "=== Démarrage de la chaîne graphique 60 FPS ==="
-Xvfb :99 -screen 0 720x1440x24 -nocursor &
+if [ -f "iso_extract/kernel" ] && [ -f "iso_extract/initrd.img" ]; then
+  echo " Boot Direct rapide via Kernel + Initrd + System.sfs"
+  qemu-system-x86_64 \
+    $KVM_FLAG \
+    -m 2048 \
+    -smp 2 \
+    -vga qxl \
+    -vnc :0 \
+    -cdrom "$ISO_NAME" \
+    -drive file=android8.qcow2,format=qcow2,if=virtio \
+    -kernel iso_extract/kernel \
+    -initrd iso_extract/initrd.img \
+    -append "root=/dev/ram0 androidboot.hardware=android_x86 nomodeset xforcevesa UVESA_MODE=720x1440 DPI=320 SRC=/ androidboot.selinux=permissive quiet" \
+    -net nic,model=virtio \
+    -net user,hostfwd=tcp::5555-:5555 \
+    -usb -device usb-tablet \
+    -daemonize
+else
+  echo " Boot via CD-ROM ISO standard"
+  qemu-system-x86_64 \
+    $KVM_FLAG \
+    -m 2048 \
+    -smp 2 \
+    -vga qxl \
+    -vnc :0 \
+    -boot d \
+    -cdrom "$ISO_NAME" \
+    -drive file=android8.qcow2,format=qcow2,if=virtio \
+    -net nic,model=virtio \
+    -net user,hostfwd=tcp::5555-:5555 \
+    -usb -device usb-tablet \
+    -daemonize
+fi
+
+# 6. Démarrage de websockify pointant précisément sur le port VNC de QEMU (:0 = 5900)
+echo "=== Connexion websockify sur QEMU VNC 127.0.0.1:5900 ==="
 sleep 2
-
-export DISPLAY=:99
-scrcpy -s 127.0.0.1:5555 \
-  --window-title="Android8Screen" \
-  --window-x=0 --window-y=0 \
-  --window-width=720 --window-height=1440 \
-  --video-bit-rate=8M \
-  --max-fps=60 \
-  --stay-awake \
-  --render-driver=software &
-sleep 3
-
-x11vnc -display :99 -nopw -forever -shared -repeat -rfbport 5900 -noxrecord -noxdamage -wait 0 -defer 0 &
-sleep 2
-
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 &
 sleep 2
 
-# 7. Démarrage de l'API Bridge Android
-echo "=== Démarrage de l'API Bridge Android ==="
-pkill -f android-bridge.cjs 2>/dev/null || true
+# 7. Démarrage du bridge ADB pour les commandes clavier/souris/touches
 CURRENT_DIR=$(pwd)
+WORK_DIR="/home/runner/work/VM/VM"
+if [ -d "$WORK_DIR" ]; then
+  CURRENT_DIR="$WORK_DIR"
+fi
 node "$CURRENT_DIR/scripts/android-bridge.cjs" &
 sleep 1
 
 # 8. Configuration NGINX Reverse-Proxy
-echo "=== Configuration du Reverse-Proxy NGINX ==="
+echo "=== Configuration NGINX ==="
 sudo mkdir -p /var/www/android-web
 sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
 sudo chmod -R 755 /var/www/android-web
@@ -116,14 +119,14 @@ server {
     proxy_request_buffering off;
     tcp_nodelay on;
 
-    # Interface Web Android 8.1 (Mode Normal Smartphone avec cadre + bouton Détection Plein Écran)
+    # Interface Web Android 8.1 Oreo (Cadre normal par défaut, plein écran sans bouton)
     location / {
         root /var/www/android-web;
         index index.html;
         try_files $uri $uri/ @novnc_proxy;
     }
 
-    # API Bridge Android (Détection clavier, saisie, touches matérielles)
+    # API Bridge ADB & Clavier
     location /api/ {
         proxy_pass http://127.0.0.1:8080/api/;
         proxy_http_version 1.1;
@@ -132,7 +135,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    # Flux noVNC WebSockets
+    # Flux noVNC WebSockets vers QEMU VNC 5900
     location /websockify {
         proxy_pass http://127.0.0.1:6080/websockify;
         proxy_http_version 1.1;
@@ -143,7 +146,7 @@ server {
         proxy_send_timeout 86400s;
     }
 
-    # Proxy noVNC direct (fichiers vnc.html, scripts, etc.)
+    # Fichiers noVNC natifs
     location @novnc_proxy {
         proxy_pass http://127.0.0.1:6080;
         proxy_http_version 1.1;
@@ -156,16 +159,16 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 9. Validation active
+# 9. Validation du port 3000
 for i in {1..20}; do
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
   if [ "$HTTP_CODE" = "200" ]; then
-    echo " Serveur Web Android 8.1 opérationnel (HTTP 200) !"
+    echo " Serveur Web Android 8.1 QEMU VNC opérationnel (HTTP 200) !"
     break
   fi
   sleep 2
 done
 
 echo "=================================================="
-echo " Android 8.1 Oreo Prêt sur Port 3000 !"
+echo " Android 8.1 QEMU VNC Stream configuré avec succès !"
 echo "=================================================="
