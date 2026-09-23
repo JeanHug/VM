@@ -3,9 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Smartphone Android 13 - Faible Latence 60 FPS</title>
+  <title>Smartphone Android 8.1 Oreo - Sans Latence</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <style>
+    :root {
+      --bg: #09090b;
+      --card-bg: #18181b;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --phone-border: #27272a;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -14,237 +22,243 @@
       user-select: none;
       -webkit-user-select: none;
     }
+
     body, html {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #000000;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    #androidContainer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+      background-color: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #000000;
-      overflow: hidden;
     }
+
+    /* CONTENEUR PRINCIPAL DU SMARTPHONE */
+    #phoneWrapper {
+      position: relative;
+      width: 420px;
+      height: 840px;
+      max-width: 95vw;
+      max-height: 92vh;
+      background: #000000;
+      border-radius: 44px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 12px #18181b, 0 0 0 14px #27272a;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* MODE DÉTECTÉ / PLEIN ÉCRAN FLUIDE SANS CADRE */
+    body.fullscreen-detected #phoneWrapper {
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    /* ENCOCHE DU SMARTPHONE (Visible seulement en mode normal) */
+    #phoneNotch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 24px;
+      background: #18181b;
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .speaker {
+      width: 48px;
+      height: 4px;
+      background: #3f3f46;
+      border-radius: 3px;
+    }
+    .camera {
+      width: 8px;
+      height: 8px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 50%;
+    }
+    body.fullscreen-detected #phoneNotch {
+      display: none !important;
+    }
+
+    /* FLUX VIDÉO STREAM (IFRAME NO-VNC MATÉRIEL) */
     #streamFrame {
+      flex: 1;
       width: 100%;
       height: 100%;
       border: none;
       background: #000000;
     }
-    
-    /* Bouton d'Auto Détection Plein Écran Flottant Intelligent */
-    #autoFsBtn {
+
+    /* BOUTON FLOTTANT DE BASCULE PLEIN ÉCRAN / DÉTECTÉ */
+    #toggleModeBtn {
       position: fixed;
-      top: 14px;
-      right: 14px;
+      top: 18px;
+      right: 18px;
       z-index: 10002;
-      background: rgba(16, 185, 129, 0.9);
+      background: rgba(16, 185, 129, 0.95);
       color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 30px;
-      padding: 8px 16px;
+      padding: 9px 18px;
       font-size: 13px;
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 8px;
       cursor: pointer;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      transition: opacity 0.3s ease, transform 0.2s ease;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(10px);
+      transition: all 0.25s ease;
     }
-    #autoFsBtn:active {
-      transform: scale(0.94);
-    }
-    #autoFsBtn.hidden-fs {
-      opacity: 0;
-      pointer-events: none;
+    #toggleModeBtn:hover {
+      background: rgba(5, 150, 105, 1);
+      transform: scale(1.04);
     }
 
-    /* Barre de Contrôle et Navigation Android */
-    #bottomNav {
-      position: fixed;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
+    /* BARRE DE NAVIGATION ANDROID TACTILE (RETOUR, ACCUEIL, RÉCENTS, CLAVIER) */
+    #androidNavBar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 48px;
+      background: rgba(10, 10, 12, 0.92);
+      backdrop-filter: blur(12px);
       display: flex;
       align-items: center;
-      gap: 12px;
-      background: rgba(18, 18, 22, 0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 40px;
-      padding: 6px 14px;
-      z-index: 10000;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      justify-content: space-around;
+      z-index: 999;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      transition: transform 0.3s ease;
     }
-    #bottomNav.active {
-      bottom: 74px;
-    }
-    .nav-btn {
+    .nav-icon-btn {
       background: none;
       border: none;
-      color: #ffffff;
-      width: 42px;
-      height: 42px;
+      color: #e4e4e7;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background 0.15s ease, transform 0.1s ease;
+      transition: background 0.15s, transform 0.1s;
     }
-    .nav-btn:active {
-      background: rgba(255, 255, 255, 0.15);
-      transform: scale(0.92);
+    .nav-icon-btn:active {
+      background: rgba(255, 255, 255, 0.18);
+      transform: scale(0.9);
     }
-    .nav-btn svg {
-      width: 22px;
-      height: 22px;
+    .nav-icon-btn svg {
+      width: 20px;
+      height: 20px;
       fill: currentColor;
     }
-    .kb-btn {
-      background: rgba(16, 185, 129, 0.2);
-      color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      position: relative;
-    }
-    .kb-badge {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      background: #10b981;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: none;
-      animation: pulse 1.2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.4); opacity: 0.7; }
-    }
 
-    /* Tiroir de Clavier Mobile */
+    /* TIROIR CLAVIER MOBILE AVEC AUTO-OUVERTURE */
     #keyboardDrawer {
-      position: fixed;
+      position: absolute;
       bottom: 0;
       left: 0;
       width: 100%;
       background: #18181b;
-      border-top: 1px solid #27272a;
-      padding: 10px 14px 14px;
+      border-top: 1px solid #3f3f46;
+      padding: 10px 12px;
       display: none;
       flex-direction: column;
-      gap: 10px;
-      z-index: 9999;
-      box-shadow: 0 -8px 30px rgba(0,0,0,0.8);
-      animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      gap: 8px;
+      z-index: 1001;
+      box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.7);
     }
-    @keyframes slideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
-    }
-    .kb-row {
+    .kb-quick-row {
       display: flex;
-      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .kb-quick-btn {
+      background: #27272a;
+      color: #e4e4e7;
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .kb-input-row {
+      display: flex;
       gap: 8px;
     }
     #kbInput {
       flex: 1;
       background: #27272a;
       border: 1px solid #3f3f46;
-      border-radius: 12px;
-      padding: 10px 14px;
+      border-radius: 10px;
+      padding: 8px 12px;
       color: #ffffff;
-      font-size: 16px;
+      font-size: 15px;
       outline: none;
-      -webkit-user-select: text;
       user-select: text;
     }
     #kbInput:focus {
       border-color: #10b981;
-      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
     }
-    .kb-action-btn {
+    .kb-send-btn {
       background: #10b981;
       color: #ffffff;
       border: none;
-      border-radius: 12px;
-      padding: 10px 16px;
+      border-radius: 10px;
+      padding: 8px 14px;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
-      white-space: nowrap;
-    }
-    .kb-action-btn:active {
-      opacity: 0.85;
-      transform: scale(0.96);
     }
     .kb-close-btn {
       background: #3f3f46;
       color: #d4d4d8;
       border: none;
-      border-radius: 12px;
-      padding: 10px 12px;
-      font-size: 14px;
+      border-radius: 10px;
+      padding: 8px 12px;
       cursor: pointer;
-    }
-    .quick-keys {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
-    .q-key {
-      background: #27272a;
-      color: #e4e4e7;
-      border: 1px solid #3f3f46;
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .q-key:active {
-      background: #3f3f46;
     }
 
-    /* Écran de Chargement */
-    #loader {
-      position: fixed;
+    /* ÉCRAN DE CHARGEMENT */
+    #loadingScreen {
+      position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
       background: #09090b;
-      color: #ffffff;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 10001;
-      transition: opacity 0.4s ease;
+      z-index: 2000;
+      transition: opacity 0.3s;
     }
-    .spinner {
-      width: 44px;
-      height: 44px;
+    .loader-spin {
+      width: 42px;
+      height: 42px;
       border: 3px solid rgba(255, 255, 255, 0.1);
       border-top-color: #10b981;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -252,156 +266,135 @@
   </style>
 </head>
 <body>
-  <!-- Écran de chargement -->
-  <div id="loader">
-    <div class="spinner"></div>
-    <div style="font-size: 17px; font-weight: 600; margin-bottom: 6px;">Connexion à Android 13</div>
-    <div style="font-size: 13px; color: #a1a1aa;">Optimisation Faible Latence 60 FPS...</div>
-  </div>
 
-  <!-- Bouton Auto Détection & Plein Écran -->
-  <button id="autoFsBtn" onclick="autoDetectAndFullscreen()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Bouton de Bascule Mode Normal / Détecté Plein Écran -->
+  <button id="toggleModeBtn" onclick="toggleScreenMode()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
     </svg>
-    <span>Auto-Plein Écran</span>
+    <span id="toggleModeText">🔍 Auto-Détection / Plein Écran</span>
   </button>
 
-  <!-- Conteneur Smartphone Android -->
-  <div id="androidContainer">
-    <iframe id="streamFrame" allow="autoplay; fullscreen; clipboard-read; clipboard-write; microphone; camera"></iframe>
-  </div>
-
-  <!-- Barre de Navigation Android -->
-  <div id="bottomNav">
-    <!-- Retour -->
-    <button class="nav-btn" onclick="sendAndroidKey('back')" title="Retour">
-      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    </button>
-    <!-- Accueil -->
-    <button class="nav-btn" onclick="sendAndroidKey('home')" title="Accueil">
-      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-    </button>
-    <!-- Récents / Multitâche -->
-    <button class="nav-btn" onclick="sendAndroidKey('appswitch')" title="Applications récentes">
-      <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
-    </button>
-    <!-- Clavier Mobile Dédié avec indicateur intelligent -->
-    <button class="nav-btn kb-btn" onclick="openKeyboardDrawer()" title="Clavier">
-      <div id="kbBadge" class="kb-badge"></div>
-      <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
-    </button>
-    <!-- Plein Écran -->
-    <button class="nav-btn" onclick="autoDetectAndFullscreen()" title="Plein Écran">
-      <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-    </button>
-  </div>
-
-  <!-- Tiroir Clavier Mobile -->
-  <div id="keyboardDrawer">
-    <div class="quick-keys">
-      <button class="q-key" onclick="sendAndroidKey('enter')">⏎ Entrée</button>
-      <button class="q-key" onclick="sendAndroidKey('backspace')">⌫ Effacer</button>
-      <button class="q-key" onclick="sendAndroidKey('tab')">⇥ Tab</button>
-      <button class="q-key" onclick="sendAndroidKey('volup')">🔊 Vol +</button>
-      <button class="q-key" onclick="sendAndroidKey('voldown')">🔉 Vol -</button>
-      <button class="q-key" onclick="sendAndroidKey('power')">⏻ Écran On/Off</button>
+  <!-- Cadre Téléphone Smartphone -->
+  <div id="phoneWrapper">
+    <!-- Encoche Haut -->
+    <div id="phoneNotch">
+      <div class="speaker"></div>
+      <div class="camera"></div>
     </div>
-    <div class="kb-row">
-      <input type="text" id="kbInput" placeholder="Saisissez votre texte..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <button class="kb-action-btn" onclick="submitText(false)">Envoyer</button>
-      <button class="kb-action-btn" style="background:#059669;" onclick="submitText(true)">Envoyer + ⏎</button>
-      <button class="kb-close-btn" onclick="closeKeyboardDrawer()">✕</button>
+
+    <!-- Écran de Chargement Initial -->
+    <div id="loadingScreen">
+      <div class="loader-spin"></div>
+      <div style="font-weight: 600; color: #fff; font-size: 15px; margin-bottom: 4px;">Android 8.1 Oreo</div>
+      <div style="color: #a1a1aa; font-size: 13px;">Connexion 60 FPS sans lag...</div>
+    </div>
+
+    <!-- Flux Direct noVNC -->
+    <iframe id="streamFrame" allow="autoplay; fullscreen; clipboard-read; clipboard-write;"></iframe>
+
+    <!-- Barre de Navigation Matérielle Tactile -->
+    <div id="androidNavBar">
+      <!-- Retour -->
+      <button class="nav-icon-btn" onclick="sendAndroidKey('back')" title="Retour">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <!-- Accueil -->
+      <button class="nav-icon-btn" onclick="sendAndroidKey('home')" title="Accueil">
+        <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      </button>
+      <!-- Récents -->
+      <button class="nav-icon-btn" onclick="sendAndroidKey('appswitch')" title="Récents">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
+      </button>
+      <!-- Clavier -->
+      <button class="nav-icon-btn" style="color:#10b981;" onclick="toggleKeyboard()" title="Clavier">
+        <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
+      </button>
+    </div>
+
+    <!-- Tiroir Clavier avec Envoi Instantané ADB -->
+    <div id="keyboardDrawer">
+      <div class="kb-quick-row">
+        <button class="kb-quick-btn" onclick="sendAndroidKey('enter')">⏎ Entrée</button>
+        <button class="kb-quick-btn" onclick="sendAndroidKey('backspace')">⌫ Effacer</button>
+        <button class="kb-quick-btn" onclick="sendAndroidKey('tab')">⇥ Tab</button>
+        <button class="kb-quick-btn" onclick="sendAndroidKey('volup')">🔊 Vol +</button>
+        <button class="kb-quick-btn" onclick="sendAndroidKey('voldown')">🔉 Vol -</button>
+      </div>
+      <div class="kb-input-row">
+        <input type="text" id="kbInput" placeholder="Saisir du texte..." autocomplete="off">
+        <button class="kb-send-btn" onclick="submitText(false)">Envoyer</button>
+        <button class="kb-send-btn" style="background:#059669;" onclick="submitText(true)">Envoyer + ⏎</button>
+        <button class="kb-close-btn" onclick="toggleKeyboard(false)">✕</button>
+      </div>
     </div>
   </div>
 
   <script>
-    const frame = document.getElementById('streamFrame');
-    const loader = document.getElementById('loader');
+    const streamFrame = document.getElementById('streamFrame');
+    const loadingScreen = document.getElementById('loadingScreen');
+    const toggleModeText = document.getElementById('toggleModeText');
     const kbDrawer = document.getElementById('keyboardDrawer');
     const kbInput = document.getElementById('kbInput');
-    const bottomNav = document.getElementById('bottomNav');
-    const autoFsBtn = document.getElementById('autoFsBtn');
-    const kbBadge = document.getElementById('kbBadge');
 
-    // Connexion optimisée au flux noVNC sans latence
-    const streamUrl = `/vnc.html?autoconnect=true&resize=scale&quality=8&compression=0&show_dot=false&bell=false`;
-    frame.src = streamUrl;
-
-    frame.onload = () => {
+    // Chargement du flux noVNC ultra-fluide
+    streamFrame.src = '/vnc.html?autoconnect=true&resize=scale&quality=9&compression=0&show_dot=false';
+    streamFrame.onload = () => {
       setTimeout(() => {
-        loader.style.opacity = '0';
-        setTimeout(() => loader.style.display = 'none', 400);
-      }, 600);
+        loadingScreen.style.opacity = '0';
+        setTimeout(() => loadingScreen.style.display = 'none', 300);
+      }, 500);
     };
 
-    // Auto-Détection de l'écran & Passage en Plein Écran
-    function autoDetectAndFullscreen() {
-      const doc = document.documentElement;
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        if (doc.requestFullscreen) {
-          doc.requestFullscreen().catch(() => {});
-        } else if (doc.webkitRequestFullscreen) {
-          doc.webkitRequestFullscreen();
+    // Bascule Mode Normal (Cadre) <-> Mode Détecté Plein Écran
+    function toggleScreenMode() {
+      const isFullscreen = document.body.classList.toggle('fullscreen-detected');
+      if (isFullscreen) {
+        toggleModeText.textContent = '📱 Mode Normal (Cadre)';
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
         }
       } else {
-        if (document.exitFullscreen) {
+        toggleModeText.textContent = '🔍 Auto-Détection / Plein Écran';
+        if (document.fullscreenElement && document.exitFullscreen) {
           document.exitFullscreen().catch(() => {});
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
         }
       }
     }
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-
-    function handleFullscreenChange() {
-      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
-      if (isFs) {
-        autoFsBtn.classList.add('hidden-fs');
-      } else {
-        autoFsBtn.classList.remove('hidden-fs');
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && document.body.classList.contains('fullscreen-detected')) {
+        document.body.classList.remove('fullscreen-detected');
+        toggleModeText.textContent = '🔍 Auto-Détection / Plein Écran';
       }
-    }
+    });
 
-    // Auto-Détection du Clavier Android (Polling léger & réactif)
-    let lastKeyboardState = false;
-    async function checkAndroidKeyboardState() {
+    // Auto-Détection Clavier IME via Bridge API
+    let prevKeyboardOpen = false;
+    async function checkKeyboardFocus() {
       try {
         const res = await fetch('/api/keyboard-state');
         if (res.ok) {
           const data = await res.json();
-          if (data.keyboardVisible && !lastKeyboardState) {
-            // Un champ de texte nécessite le clavier dans Android -> ouverture automatique
-            openKeyboardDrawer();
-            kbBadge.style.display = 'block';
-          } else if (!data.keyboardVisible && lastKeyboardState) {
-            kbBadge.style.display = 'none';
+          if (data.keyboardVisible && !prevKeyboardOpen) {
+            toggleKeyboard(true);
           }
-          lastKeyboardState = data.keyboardVisible;
+          prevKeyboardOpen = data.keyboardVisible;
         }
-      } catch (e) {
-        // En cas de micro coupure réseau
+      } catch (e) {}
+    }
+    setInterval(checkKeyboardFocus, 1000);
+
+    // Fonctions Clavier & Saisie
+    function toggleKeyboard(force) {
+      const show = typeof force === 'boolean' ? force : kbDrawer.style.display !== 'flex';
+      kbDrawer.style.display = show ? 'flex' : 'none';
+      if (show) {
+        setTimeout(() => kbInput.focus(), 50);
+      } else {
+        kbInput.blur();
       }
-    }
-
-    // Vérifier l'état du clavier Android toutes les 1.2 secondes
-    setInterval(checkAndroidKeyboardState, 1200);
-
-    // Fonctions Clavier Mobile
-    function openKeyboardDrawer() {
-      kbDrawer.style.display = 'flex';
-      bottomNav.classList.add('active');
-      setTimeout(() => {
-        kbInput.focus();
-      }, 100);
-    }
-
-    function closeKeyboardDrawer() {
-      kbDrawer.style.display = 'none';
-      bottomNav.classList.remove('active');
-      kbInput.blur();
     }
 
     async function submitText(withEnter) {
@@ -411,11 +404,11 @@
           await fetch('/api/type', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, enter: withEnter })
+            body: JSON.stringify({ text, enter: withEnter })
           });
           kbInput.value = '';
         } catch (e) {
-          console.error('Text submission error:', e);
+          console.error(e);
         }
       } else if (withEnter) {
         sendAndroidKey('enter');
@@ -429,35 +422,13 @@
       }
     });
 
-    // Raccourcis touches physiques Android (ADB)
     async function sendAndroidKey(key) {
       try {
         await fetch(`/api/key?k=${encodeURIComponent(key)}`);
       } catch (e) {
-        console.error('Key error:', e);
+        console.error(e);
       }
     }
-
-    // Auto-masquage discret de la barre après inactivité
-    let navTimeout = null;
-    function resetNavTimer() {
-      bottomNav.style.opacity = '0.9';
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        autoFsBtn.style.opacity = '1';
-      }
-      clearTimeout(navTimeout);
-      navTimeout = setTimeout(() => {
-        if (kbDrawer.style.display !== 'flex') {
-          bottomNav.style.opacity = '0.25';
-          if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-            autoFsBtn.style.opacity = '0.35';
-          }
-        }
-      }, 4000);
-    }
-    document.addEventListener('touchstart', resetNavTimer, { passive: true });
-    document.addEventListener('mousemove', resetNavTimer, { passive: true });
-    resetNavTimer();
   </script>
 </body>
 </html>
