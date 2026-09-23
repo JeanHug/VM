@@ -27,7 +27,7 @@ if [ -e "/dev/kvm" ]; then
   sudo chmod 666 /dev/kvm 2>/dev/null || true
 fi
 
-# 2. Démarrage de Redroid 13 Natif AOSP Ultra-Fluid (720x1560, 60fps)
+# 2. Démarrage de Redroid 13 Natif AOSP Ultra-Fluide (720x1560, 60fps)
 echo "=== Démarrage d'Android 13 Natif (Redroid 13.0) ==="
 docker rm -f redroid13 android_vm 2>/dev/null || true
 pkill -9 -f nginx 2>/dev/null || true
@@ -88,7 +88,7 @@ scrcpy -s 127.0.0.1:5555 \
   --render-driver=software &
 sleep 3
 
-# x11vnc configuré pour un temps de réponse instantané (-wait 0, -defer 0, -nowf)
+# x11vnc configuré pour un temps de réponse instantané (-wait 0, -defer 0)
 x11vnc -display :99 -nopw -forever -shared -repeat -rfbport 5900 -noxrecord -noxdamage -wait 0 -defer 0 &
 sleep 2
 
@@ -102,9 +102,13 @@ CURRENT_DIR=$(pwd)
 node "$CURRENT_DIR/scripts/android-bridge.cjs" &
 sleep 1
 
-# 7. Configuration NGINX Reverse-Proxy
+# 7. Configuration NGINX Reverse-Proxy (avec dossier web public garanti)
 echo "=== Configuration du Reverse-Proxy NGINX ==="
-cat << NGINX_EOF | sudo tee /etc/nginx/sites-available/default > /dev/null
+sudo mkdir -p /var/www/android-web
+sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
+sudo chmod -R 755 /var/www/android-web
+
+cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
     listen 3000 default_server;
     listen [::]:3000 default_server;
@@ -114,36 +118,37 @@ server {
     tcp_nodelay on;
 
     # Page d'accueil : Interface Smartphone Plein Écran + Auto Clavier
-    location = / {
-        root $CURRENT_DIR/android-web;
-        try_files /index.html =404;
+    location / {
+        root /var/www/android-web;
+        index index.html;
+        try_files $uri $uri/ @novnc_proxy;
     }
 
     # API Bridge Android (Détection clavier, saisie, touches matérielles)
     location /api/ {
         proxy_pass http://127.0.0.1:8080/api/;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
     # Flux noVNC WebSockets
     location /websockify {
         proxy_pass http://127.0.0.1:6080/websockify;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
+        proxy_set_header Host $host;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
 
-    # Fichiers statiques noVNC
-    location / {
-        proxy_pass http://127.0.0.1:6080/;
+    # Proxy de secours vers noVNC (fichiers vnc.html, core, vendor)
+    location @novnc_proxy {
+        proxy_pass http://127.0.0.1:6080;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host $host;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -151,6 +156,17 @@ server {
 NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
+
+# 8. Validation active de la page web
+echo "=== Validation active de l'accès Web Smartphone ==="
+for i in {1..30}; do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo " Serveur Web Smartphone Android 13 actif (HTTP 200) !"
+    break
+  fi
+  sleep 2
+done
 
 echo "=================================================="
 echo " Android 13 Ultra-Fluide Prêt sur Port 3000 !"
