@@ -7,7 +7,7 @@ const PORT = 8080;
 
 function runAdb(cmd) {
   return new Promise((resolve) => {
-    exec(`adb -s 127.0.0.1:5555 ${cmd}`, { timeout: 4000 }, (err, stdout, stderr) => {
+    exec(`adb connect 127.0.0.1:5555 >/dev/null 2>&1; adb -s 127.0.0.1:5555 ${cmd}`, { timeout: 4000 }, (err, stdout, stderr) => {
       if (err) {
         resolve({ success: false, error: err.message, stderr: String(stderr) });
       } else {
@@ -18,7 +18,6 @@ function runAdb(cmd) {
 }
 
 const server = http.createServer(async (req, res) => {
-  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -34,44 +33,17 @@ const server = http.createServer(async (req, res) => {
   // API: Health / Status
   if (url.pathname === '/api/status') {
     const boot = await runAdb('shell getprop sys.boot_completed');
+    const isReady = boot.stdout === '1';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      online: boot.stdout === '1',
-      bootCompleted: boot.stdout === '1',
+      online: isReady,
+      bootCompleted: isReady,
       timestamp: new Date().toISOString()
     }));
     return;
   }
 
-  // API: Auto-detection du Clavier Android (IME visible / champ texte ciblé)
-  if (url.pathname === '/api/keyboard-state') {
-    try {
-      // 1. Vérifier si l'IME virtuel d'Android demande à être affiché
-      const imeRes = await runAdb('shell dumpsys input_method');
-      const imeOut = imeRes.stdout || '';
-      const isInputShown = imeOut.includes('mInputShown=true') || 
-                           imeOut.includes('mServedInputConnection=true') || 
-                           imeOut.includes('mCurMethodId=');
-
-      // 2. Vérifier si la fenêtre active possède le focus sur un champ éditable
-      const winRes = await runAdb('shell dumpsys window displays');
-      const winOut = winRes.stdout || '';
-      const isImeWindow = winOut.includes('InputMethod') || winOut.includes('mCurrentFocus=');
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        keyboardVisible: isInputShown,
-        inputFocused: isImeWindow,
-        timestamp: Date.now()
-      }));
-    } catch (e) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ keyboardVisible: false, error: e.message }));
-    }
-    return;
-  }
-
-  // API: Keyevent (Back, Home, AppSwitch, Power, etc.)
+  // API: Keyevent
   if (url.pathname === '/api/key') {
     const key = url.searchParams.get('k') || '4';
     const keyMap = {
@@ -136,5 +108,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Android Bridge API with Keyboard Detection running on 127.0.0.1:${PORT}`);
+  console.log(`Android Bridge API running on 127.0.0.1:${PORT}`);
 });
