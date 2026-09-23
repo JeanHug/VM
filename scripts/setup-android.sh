@@ -3,7 +3,7 @@ set -e
 
 echo "=================================================="
 echo "    ANDROID GRAPHICAL SMARTPHONE (PORTRAIT 720x1280)"
-echo "   Software Rendering + Auto-Provisioning Launcher  "
+echo "   Amorçage Direct ISO + Attente Synchrone Boot    "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_oreo_data"
@@ -33,31 +33,16 @@ if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
   curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
 fi
 
-# 4. Extraction des composants de boot
-echo "=== 2. Extraction du noyau et du système ==="
+# 4. Extraction des composants de boot (kernel + initrd)
+echo "=== 2. Extraction du noyau et initrd ==="
 mkdir -p "$DATA_DIR/android_fs"
-7z x -y "$ISO_NAME" -o"$DATA_DIR/android_fs" >/dev/null 2>&1 || true
+7z x -y "$ISO_NAME" -o"$DATA_DIR/android_fs" kernel initrd.img >/dev/null 2>&1 || true
 
-# Partition de données ext4 native Android-x86 (data.img)
+# Partition de données ext4 pour Android
 if [ ! -f "data.img" ]; then
   echo "Création de la partition de données ext4 (data.img)..."
-  qemu-img create -f raw data.img 4G
+  qemu-img create -f raw data.img 3G
   mkfs.ext4 -F -L "data" data.img >/dev/null 2>&1 || true
-fi
-
-# Partition système ext4 combinée
-if [ ! -f "android_disk.img" ]; then
-  echo "Création de la partition système Android..."
-  qemu-img create -f raw android_disk.img 6G
-  mkfs.ext4 -F -L "AndroidOS" android_disk.img >/dev/null 2>&1 || true
-  
-  MOUNT_DIR="/tmp/mnt_android"
-  sudo mkdir -p "$MOUNT_DIR"
-  sudo mount -o loop android_disk.img "$MOUNT_DIR"
-  sudo cp -r "$DATA_DIR/android_fs/"* "$MOUNT_DIR/" 2>/dev/null || true
-  sudo cp "$DATA_DIR/data.img" "$MOUNT_DIR/data.img" 2>/dev/null || true
-  sudo umount "$MOUNT_DIR" || true
-  sudo rm -rf "$MOUNT_DIR"
 fi
 
 # 5. Détection KVM
@@ -69,19 +54,20 @@ else
   KVM_FLAG="-cpu max"
 fi
 
-# 6. Démarrage QEMU (3.5 Go RAM, Rendu VESA software 720x1280, HWACCEL=0)
-echo "=== 3. Démarrage QEMU Android (Portrait 720x1280 VESA Software) ==="
+# 6. Démarrage QEMU avec CDROM ISO + disque de données (Mode VESA Portrait 720x1280)
+echo "=== 3. Démarrage QEMU Android (Portrait 720x1280) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
-  -m 3584 \
+  -m 3072 \
   -smp 2 \
   -vga std \
   -global VGA.vgamem_mb=64 \
   -vnc 127.0.0.1:0 \
+  -cdrom "$DATA_DIR/$ISO_NAME" \
+  -drive file="$DATA_DIR/data.img",format=raw,if=virtio \
   -kernel "$DATA_DIR/android_fs/kernel" \
   -initrd "$DATA_DIR/android_fs/initrd.img" \
-  -drive file="$DATA_DIR/android_disk.img",format=raw,if=virtio \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data.img UVESA_MODE=720x1280 DPI=280 HWACCEL=0 nomodeset xforcevesa quiet" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug DATA=/dev/vda UVESA_MODE=720x1280 DPI=280 nomodeset xforcevesa quiet" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
@@ -153,45 +139,44 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 10. Validation HTTP
-for i in {1..20}; do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
-  if [ "$HTTP_CODE" = "200" ]; then
-    echo " Serveur Web Android QEMU opérationnel (HTTP 200) !"
-    break
-  fi
-  sleep 2
-done
+# 10. Attente SYNCHRONE jusqu'à ce qu'Android soit 100% DÉMARRÉ et SUR LE LAUNCHER
+echo "=== 6. Attente synchrone du démarrage complet d'Android (sys.boot_completed) ==="
+BOOT_SUCCESS=0
+for attempt in {1..60}; do
+  sleep 4
+  adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+  
+  # Réveil de l'écran et simulation de déverrouillage
+  adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
+  adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
 
-# 11. Auto-Provisioning ADB & Déverrouillage automatique du Launcher
-(
-  echo "Attente de l'initialisation ADB..."
-  for attempt in {1..50}; do
-    sleep 3
-    adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+  BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null || echo "0")
+  if [ "$BOOT_OK" = "1" ]; then
+    echo "✅ ANDROID BOOT TERMINE AVEC SUCCES (sys.boot_completed = 1) !"
+    BOOT_SUCCESS=1
     
-    # Envoi périodique de déverrouillage pour réveiller SystemServer / Zygote
+    # Auto-provisioning & contournement de la configuration initiale
+    adb -s 127.0.0.1:5555 shell settings put global device_provisioned 1 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell settings put secure user_setup_complete 1 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell wm density 280 >/dev/null 2>&1 || true
+    
+    # Lancement explicite de l'écran d'accueil (Launcher)
     adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
     adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
-    
-    BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null || echo "0")
-    if [ "$BOOT_OK" = "1" ]; then
-      echo "=== ANDROID BOOT COMPLET EFFECTUE ==="
-      # Contournement de l'assistant de configuration initiale
-      adb -s 127.0.0.1:5555 shell settings put global device_provisioned 1 >/dev/null 2>&1 || true
-      adb -s 127.0.0.1:5555 shell settings put secure user_setup_complete 1 >/dev/null 2>&1 || true
-      # Configuration écran, rotation et Launcher
-      adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
-      adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
-      adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
-      adb -s 127.0.0.1:5555 shell wm density 280 >/dev/null 2>&1 || true
-      # Aller sur l'écran d'accueil
-      adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
-      break
-    fi
-  done
-) >/dev/null 2>&1 &
+    sleep 3
+    break
+  else
+    echo "Attente du boot Android... (tentative $attempt/60)"
+  fi
+done
 
-echo "=================================================="
-echo " Android Graphique Prêt (Port 3000) !"
-echo "=================================================="
+if [ "$BOOT_SUCCESS" = "1" ]; then
+  echo "=================================================="
+  echo " Android Smartphone Prêt & Fonctionnel !"
+  echo "=================================================="
+else
+  echo "⚠️ Android est démarré en arrière-plan, passage à l'étape suivante..."
+fi
