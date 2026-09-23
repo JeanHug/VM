@@ -3,144 +3,119 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#09090b">
-  <title>Smartphone Android 13 • Natif 60 FPS</title>
+  <title>Smartphone Android 13 - Cloud Web Edition</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
       user-select: none;
+      -webkit-user-select: none;
     }
-
-    html, body {
-      width: 100vw;
-      height: 100vh;
-      height: 100dvh;
+    body, html {
+      width: 100%;
+      height: 100%;
       overflow: hidden;
       background-color: #000000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      touch-action: none;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-
-    /* Conteneur Plein Écran pour le smartphone Android */
     #androidContainer {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: #000000;
+      width: 100vw;
+      height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 1;
+      background: #000000;
+      overflow: hidden;
     }
-
     #streamFrame {
       width: 100%;
       height: 100%;
       border: none;
-      outline: none;
-      background: #000;
-      display: block;
+      background: #000000;
     }
-
-    /* Barre de Navigation Android & Commandes */
+    /* Barre de Contrôle et Navigation Android */
     #bottomNav {
       position: fixed;
-      bottom: env(safe-area-inset-bottom, 8px);
+      bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(18, 18, 22, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 36px;
-      padding: 6px 16px;
       display: flex;
       align-items: center;
       gap: 12px;
-      z-index: 9999;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      opacity: 0.9;
+      background: rgba(18, 18, 22, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 40px;
+      padding: 6px 14px;
+      z-index: 10000;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      transition: opacity 0.3s ease, transform 0.3s ease;
     }
-
-    #bottomNav:hover, #bottomNav:active, #bottomNav.active {
-      opacity: 1;
-      transform: translateX(-50%) scale(1.02);
+    #bottomNav.active {
+      bottom: 74px;
     }
-
     .nav-btn {
-      background: transparent;
+      background: none;
       border: none;
-      color: #f1f5f9;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      color: #ffffff;
       width: 42px;
       height: 42px;
       border-radius: 50%;
-      transition: all 0.15s ease;
-      touch-action: manipulation;
-      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
-
     .nav-btn:active {
-      background: rgba(255, 255, 255, 0.22);
-      transform: scale(0.88);
+      background: rgba(255, 255, 255, 0.15);
+      transform: scale(0.92);
     }
-
     .nav-btn svg {
       width: 22px;
       height: 22px;
       fill: currentColor;
     }
-
-    .nav-btn.kb-btn {
+    .kb-btn {
       background: rgba(16, 185, 129, 0.2);
       color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.4);
+      border: 1px solid rgba(16, 185, 129, 0.3);
     }
-
-    /* Tiroir de saisie clavier mobile ultra-pratique */
+    .kb-btn:active {
+      background: rgba(16, 185, 129, 0.4);
+    }
+    /* Tiroir de Clavier Mobile */
     #keyboardDrawer {
       position: fixed;
       bottom: 0;
       left: 0;
       width: 100%;
       background: #18181b;
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 12px 16px env(safe-area-inset-bottom, 12px);
+      border-top: 1px solid #27272a;
+      padding: 10px 14px 14px;
       display: none;
       flex-direction: column;
-      gap: 8px;
-      z-index: 10000;
+      gap: 10px;
+      z-index: 9999;
       box-shadow: 0 -8px 30px rgba(0,0,0,0.8);
       animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-
     @keyframes slideUp {
       from { transform: translateY(100%); }
       to { transform: translateY(0); }
     }
-
     .kb-row {
       display: flex;
       align-items: center;
       gap: 8px;
     }
-
     #kbInput {
       flex: 1;
       background: #27272a;
@@ -153,12 +128,10 @@
       -webkit-user-select: text;
       user-select: text;
     }
-
     #kbInput:focus {
       border-color: #10b981;
       box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
     }
-
     .kb-action-btn {
       background: #10b981;
       color: #ffffff;
@@ -170,12 +143,10 @@
       cursor: pointer;
       white-space: nowrap;
     }
-
     .kb-action-btn:active {
       opacity: 0.85;
       transform: scale(0.96);
     }
-
     .kb-close-btn {
       background: #3f3f46;
       color: #d4d4d8;
@@ -185,14 +156,12 @@
       font-size: 14px;
       cursor: pointer;
     }
-
     .quick-keys {
       display: flex;
       gap: 6px;
       overflow-x: auto;
       padding-bottom: 4px;
     }
-
     .q-key {
       background: #27272a;
       color: #e4e4e7;
@@ -203,11 +172,9 @@
       cursor: pointer;
       white-space: nowrap;
     }
-
     .q-key:active {
       background: #3f3f46;
     }
-
     /* Écran de Chargement */
     #loader {
       position: fixed;
@@ -224,7 +191,6 @@
       z-index: 10001;
       transition: opacity 0.4s ease;
     }
-
     .spinner {
       width: 44px;
       height: 44px;
@@ -234,14 +200,12 @@
       animation: spin 0.8s linear infinite;
       margin-bottom: 16px;
     }
-
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
-
   <!-- Écran de chargement -->
   <div id="loader">
     <div class="spinner"></div>
@@ -260,22 +224,18 @@
     <button class="nav-btn" onclick="sendAndroidKey('back')" title="Retour">
       <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     </button>
-
     <!-- Accueil -->
     <button class="nav-btn" onclick="sendAndroidKey('home')" title="Accueil">
       <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
     </button>
-
     <!-- Récents / Multitâche -->
     <button class="nav-btn" onclick="sendAndroidKey('appswitch')" title="Applications récentes">
       <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
     </button>
-
     <!-- Clavier Mobile Dédié -->
     <button class="nav-btn kb-btn" onclick="openKeyboardDrawer()" title="Saisir du texte avec votre clavier mobile">
       <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
     </button>
-
     <!-- Plein Écran -->
     <button class="nav-btn" onclick="toggleFullscreen()" title="Plein Écran">
       <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
@@ -307,7 +267,7 @@
     const kbInput = document.getElementById('kbInput');
     const bottomNav = document.getElementById('bottomNav');
 
-    // Connexion automatique au flux noVNC ultra-optimisé avec plein écran sans bordure
+    // Connexion automatique au flux noVNC avec mise à l'échelle automatique
     const streamUrl = `/vnc.html?autoconnect=true&resize=scale&quality=8&compression=2&show_dot=false&bell=false`;
     frame.src = streamUrl;
 
@@ -395,7 +355,6 @@
         }
       }, 4000);
     }
-
     document.addEventListener('touchstart', resetNavTimer, { passive: true });
     document.addEventListener('mousemove', resetNavTimer, { passive: true });
     resetNavTimer();
