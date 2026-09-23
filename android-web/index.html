@@ -3,14 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Smartphone Android 8.1 Oreo - Sans Latence</title>
+  <title>Smartphone Android 8.1 Oreo</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <style>
     :root {
       --bg: #09090b;
-      --card-bg: #18181b;
-      --accent: #10b981;
-      --accent-hover: #059669;
       --phone-border: #27272a;
     }
 
@@ -47,10 +44,10 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* MODE DÉTECTÉ / PLEIN ÉCRAN FLUIDE SANS CADRE */
+    /* MODE DÉTECTÉ / PLEIN ÉCRAN FLUIDE SANS AUCUN CADRE NI BOUTON */
     body.fullscreen-detected #phoneWrapper {
       width: 100vw !important;
       height: 100vh !important;
@@ -94,7 +91,7 @@
       display: none !important;
     }
 
-    /* FLUX VIDÉO STREAM (IFRAME NO-VNC MATÉRIEL) */
+    /* FLUX VIDÉO DIRECT NOVNC */
     #streamFrame {
       flex: 1;
       width: 100%;
@@ -103,7 +100,7 @@
       background: #000000;
     }
 
-    /* BOUTON FLOTTANT DE BASCULE PLEIN ÉCRAN / DÉTECTÉ */
+    /* BOUTON FLOTTANT PLEIN ÉCRAN (DISPARAÎT COMPLÈTEMENT EN PLEIN ÉCRAN) */
     #toggleModeBtn {
       position: fixed;
       top: 18px;
@@ -122,11 +119,15 @@
       cursor: pointer;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(10px);
-      transition: all 0.25s ease;
+      transition: all 0.2s ease;
     }
     #toggleModeBtn:hover {
       background: rgba(5, 150, 105, 1);
       transform: scale(1.04);
+    }
+    /* LE BOUTON DISPARAÎT TOTALEMENT EN PLEIN ÉCRAN SELON LA DEMANDE */
+    body.fullscreen-detected #toggleModeBtn {
+      display: none !important;
     }
 
     /* BARRE DE NAVIGATION ANDROID TACTILE (RETOUR, ACCUEIL, RÉCENTS, CLAVIER) */
@@ -168,72 +169,15 @@
       fill: currentColor;
     }
 
-    /* TIROIR CLAVIER MOBILE AVEC AUTO-OUVERTURE */
-    #keyboardDrawer {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: #18181b;
-      border-top: 1px solid #3f3f46;
-      padding: 10px 12px;
-      display: none;
-      flex-direction: column;
-      gap: 8px;
-      z-index: 1001;
-      box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.7);
-    }
-    .kb-quick-row {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
-    .kb-quick-btn {
-      background: #27272a;
-      color: #e4e4e7;
-      border: 1px solid #3f3f46;
-      border-radius: 8px;
-      padding: 5px 10px;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .kb-input-row {
-      display: flex;
-      gap: 8px;
-    }
-    #kbInput {
-      flex: 1;
-      background: #27272a;
-      border: 1px solid #3f3f46;
-      border-radius: 10px;
-      padding: 8px 12px;
-      color: #ffffff;
-      font-size: 15px;
-      outline: none;
-      user-select: text;
-    }
-    #kbInput:focus {
-      border-color: #10b981;
-    }
-    .kb-send-btn {
-      background: #10b981;
-      color: #ffffff;
-      border: none;
-      border-radius: 10px;
-      padding: 8px 14px;
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .kb-close-btn {
-      background: #3f3f46;
-      color: #d4d4d8;
-      border: none;
-      border-radius: 10px;
-      padding: 8px 12px;
-      cursor: pointer;
+    /* INPUT INVISIBLE POUR CLAVIER VIRTUEL NID DU SMARTPHONE */
+    #hiddenKeyboardInput {
+      position: fixed;
+      top: -100px;
+      left: -100px;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
     }
 
     /* ÉCRAN DE CHARGEMENT */
@@ -267,12 +211,15 @@
 </head>
 <body>
 
-  <!-- Bouton de Bascule Mode Normal / Détecté Plein Écran -->
-  <button id="toggleModeBtn" onclick="toggleScreenMode()">
+  <!-- Input caché pour invoquer le clavier tactile du smartphone de l'utilisateur sans UI inutile -->
+  <input type="text" id="hiddenKeyboardInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+  <!-- Bouton de Bascule Mode Normal -> Plein Écran (Disparaît dès qu'on est en plein écran) -->
+  <button id="toggleModeBtn" onclick="enableFullscreenMode()">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
     </svg>
-    <span id="toggleModeText">🔍 Auto-Détection / Plein Écran</span>
+    <span>🔍 Auto-Détection / Plein Écran</span>
   </button>
 
   <!-- Cadre Téléphone Smartphone -->
@@ -287,13 +234,13 @@
     <div id="loadingScreen">
       <div class="loader-spin"></div>
       <div style="font-weight: 600; color: #fff; font-size: 15px; margin-bottom: 4px;">Android 8.1 Oreo</div>
-      <div style="color: #a1a1aa; font-size: 13px;">Connexion 60 FPS sans lag...</div>
+      <div style="color: #a1a1aa; font-size: 13px;">Démarrage affichage QEMU direct...</div>
     </div>
 
     <!-- Flux Direct noVNC -->
     <iframe id="streamFrame" allow="autoplay; fullscreen; clipboard-read; clipboard-write;"></iframe>
 
-    <!-- Barre de Navigation Matérielle Tactile -->
+    <!-- Barre de Navigation Android Tactile -->
     <div id="androidNavBar">
       <!-- Retour -->
       <button class="nav-icon-btn" onclick="sendAndroidKey('back')" title="Retour">
@@ -307,127 +254,75 @@
       <button class="nav-icon-btn" onclick="sendAndroidKey('appswitch')" title="Récents">
         <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
       </button>
-      <!-- Clavier -->
-      <button class="nav-icon-btn" style="color:#10b981;" onclick="toggleKeyboard()" title="Clavier">
+      <!-- Bouton Clavier Direct : Ouvre le clavier et retransmet chaque frappe instantanément -->
+      <button class="nav-icon-btn" style="color:#10b981;" onclick="openVirtualKeyboard()" title="Clavier">
         <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
       </button>
-    </div>
-
-    <!-- Tiroir Clavier avec Envoi Instantané ADB -->
-    <div id="keyboardDrawer">
-      <div class="kb-quick-row">
-        <button class="kb-quick-btn" onclick="sendAndroidKey('enter')">⏎ Entrée</button>
-        <button class="kb-quick-btn" onclick="sendAndroidKey('backspace')">⌫ Effacer</button>
-        <button class="kb-quick-btn" onclick="sendAndroidKey('tab')">⇥ Tab</button>
-        <button class="kb-quick-btn" onclick="sendAndroidKey('volup')">🔊 Vol +</button>
-        <button class="kb-quick-btn" onclick="sendAndroidKey('voldown')">🔉 Vol -</button>
-      </div>
-      <div class="kb-input-row">
-        <input type="text" id="kbInput" placeholder="Saisir du texte..." autocomplete="off">
-        <button class="kb-send-btn" onclick="submitText(false)">Envoyer</button>
-        <button class="kb-send-btn" style="background:#059669;" onclick="submitText(true)">Envoyer + ⏎</button>
-        <button class="kb-close-btn" onclick="toggleKeyboard(false)">✕</button>
-      </div>
     </div>
   </div>
 
   <script>
     const streamFrame = document.getElementById('streamFrame');
     const loadingScreen = document.getElementById('loadingScreen');
-    const toggleModeText = document.getElementById('toggleModeText');
-    const kbDrawer = document.getElementById('keyboardDrawer');
-    const kbInput = document.getElementById('kbInput');
+    const hiddenInput = document.getElementById('hiddenKeyboardInput');
 
-    // Chargement du flux noVNC ultra-fluide
+    // Chargement du flux noVNC
     streamFrame.src = '/vnc.html?autoconnect=true&resize=scale&quality=9&compression=0&show_dot=false';
     streamFrame.onload = () => {
       setTimeout(() => {
         loadingScreen.style.opacity = '0';
         setTimeout(() => loadingScreen.style.display = 'none', 300);
-      }, 500);
+      }, 600);
     };
 
-    // Bascule Mode Normal (Cadre) <-> Mode Détecté Plein Écran
-    function toggleScreenMode() {
-      const isFullscreen = document.body.classList.toggle('fullscreen-detected');
-      if (isFullscreen) {
-        toggleModeText.textContent = '📱 Mode Normal (Cadre)';
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
-      } else {
-        toggleModeText.textContent = '🔍 Auto-Détection / Plein Écran';
-        if (document.fullscreenElement && document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
-        }
+    // Mode Plein Écran (Le bouton disparaît en plein écran)
+    function enableFullscreenMode() {
+      document.body.classList.add('fullscreen-detected');
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
       }
     }
 
     document.addEventListener('fullscreenchange', () => {
-      if (!document.fullscreenElement && document.body.classList.contains('fullscreen-detected')) {
+      if (!document.fullscreenElement) {
+        // En sortant du plein écran (Échap ou geste retour), réaffiche le cadre et le bouton
         document.body.classList.remove('fullscreen-detected');
-        toggleModeText.textContent = '🔍 Auto-Détection / Plein Écran';
       }
     });
 
-    // Auto-Détection Clavier IME via Bridge API
-    let prevKeyboardOpen = false;
-    async function checkKeyboardFocus() {
-      try {
-        const res = await fetch('/api/keyboard-state');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.keyboardVisible && !prevKeyboardOpen) {
-            toggleKeyboard(true);
-          }
-          prevKeyboardOpen = data.keyboardVisible;
-        }
-      } catch (e) {}
+    // Gestion du Clavier Direct : ouvre le clavier natif et retransmet le texte tapé instantanément
+    function openVirtualKeyboard() {
+      hiddenInput.focus();
     }
-    setInterval(checkKeyboardFocus, 1000);
 
-    // Fonctions Clavier & Saisie
-    function toggleKeyboard(force) {
-      const show = typeof force === 'boolean' ? force : kbDrawer.style.display !== 'flex';
-      kbDrawer.style.display = show ? 'flex' : 'none';
-      if (show) {
-        setTimeout(() => kbInput.focus(), 50);
-      } else {
-        kbInput.blur();
+    hiddenInput.addEventListener('input', (e) => {
+      const val = hiddenInput.value;
+      if (val.length > 0) {
+        // Envoi direct sans aucune boîte intermédiaire
+        fetch('/api/type', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: val, enter: false })
+        }).catch(() => {});
+        hiddenInput.value = '';
       }
-    }
+    });
 
-    async function submitText(withEnter) {
-      const text = kbInput.value;
-      if (text) {
-        try {
-          await fetch('/api/type', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, enter: withEnter })
-          });
-          kbInput.value = '';
-        } catch (e) {
-          console.error(e);
-        }
-      } else if (withEnter) {
+    hiddenInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        sendAndroidKey('backspace');
+      } else if (e.key === 'Enter') {
         sendAndroidKey('enter');
-      }
-    }
-
-    kbInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        submitText(true);
+      } else if (e.key === 'Tab') {
+        sendAndroidKey('tab');
       }
     });
 
+    // Envoi des touches Android directes via ADB
     async function sendAndroidKey(key) {
       try {
         await fetch(`/api/key?k=${encodeURIComponent(key)}`);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) {}
     }
   </script>
 </body>
