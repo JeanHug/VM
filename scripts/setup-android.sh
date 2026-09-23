@@ -3,7 +3,7 @@ set -e
 
 echo "=================================================="
 echo "    ANDROID 8.1 OREO DIRECT BOOT - FORMAT PORTRAIT"
-echo "  (Native Redroid Container + Hardware 60 FPS)    "
+echo "  (Native Redroid Container + Scrcpy 720x1280)    "
 echo "=================================================="
 
 # 1. Configuration des modules de noyau Binder pour Android
@@ -11,16 +11,26 @@ echo "=== Chargement des modules Binder & Ashmem ==="
 sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>/dev/null || true
 sudo modprobe ashmem_linux 2>/dev/null || true
 
-# Montage du système de fichiers Binder si nécessaire
+# Configuration propre de BinderFS
 if [ ! -d "/dev/binderfs" ]; then
   sudo mkdir -p /dev/binderfs
   sudo mount -t binder binder /dev/binderfs 2>/dev/null || true
-  sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
-  sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
-  sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
 fi
 
-# Permissions sur les périphériques
+# Construction des arguments de montage Docker pour Binder de manière dynamique et sûre
+DOCKER_BINDER_ARGS=""
+if [ -d "/dev/binderfs" ]; then
+  DOCKER_BINDER_ARGS="$DOCKER_BINDER_ARGS -v /dev/binderfs:/dev/binderfs"
+fi
+
+for b in binder hwbinder vndbinder; do
+  if [ -e "/dev/$b" ]; then
+    DOCKER_BINDER_ARGS="$DOCKER_BINDER_ARGS -v /dev/$b:/dev/$b"
+  elif [ -e "/dev/binderfs/$b" ]; then
+    DOCKER_BINDER_ARGS="$DOCKER_BINDER_ARGS -v /dev/binderfs/$b:/dev/$b"
+  fi
+done
+
 sudo chmod 666 /dev/binder* /dev/ashmem* /dev/binderfs/* 2>/dev/null || true
 
 # 2. Nettoyage des anciens processus
@@ -39,11 +49,7 @@ sudo apt-get install -y -qq adb scrcpy xvfb x11vnc websockify novnc nginx curl w
 echo "=== Démarrage d'Android 8.1 Oreo (720x1280, 280 DPI, 60 fps) ==="
 docker run -d --privileged \
   --name android_oreo \
-  -v /dev/binderfs:/dev/binderfs \
-  -v /dev/binder:/dev/binder \
-  -v /dev/hwbinder:/dev/hwbinder \
-  -v /dev/vndbinder:/dev/vndbinder \
-  -v /data:/data \
+  $DOCKER_BINDER_ARGS \
   -p 5555:5555 \
   redroid/redroid:8.1.0-latest \
   androidboot.redroid_width=720 \
@@ -55,8 +61,9 @@ docker run -d --privileged \
 
 # 5. Attente de la fin du démarrage Android (boot_completed)
 echo "=== Attente du démarrage complet d'Android (sys.boot_completed=1) ==="
+sleep 3
 adb connect 127.0.0.1:5555 || true
-for i in {1..30}; do
+for i in {1..35}; do
   BOOT=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || echo "0")
   if [ "$BOOT" = "1" ]; then
     echo " Android 8.1 Oreo a terminé son boot avec succès !"
@@ -65,10 +72,7 @@ for i in {1..30}; do
   sleep 2
 done
 
-# Désactivation des animations et configuration du déverrouillage
-adb -s 127.0.0.1:5555 shell settings put global window_animation_scale 0.5 2>/dev/null || true
-adb -s 127.0.0.1:5555 shell settings put global transition_animation_scale 0.5 2>/dev/null || true
-adb -s 127.0.0.1:5555 shell settings put global animator_duration_scale 0.5 2>/dev/null || true
+# Configuration du déverrouillage et de l'environnement graphique
 adb -s 127.0.0.1:5555 shell input keyevent 82 2>/dev/null || true # Unlock screen
 
 # 6. Démarrage de l'affichage X11 virtuel en Portrait 720x1280 exact
