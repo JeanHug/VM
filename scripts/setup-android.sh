@@ -3,7 +3,7 @@ set -e
 
 echo "=================================================="
 echo "    ANDROID GRAPHICAL SMARTPHONE (PORTRAIT 720x1280)"
-echo "   Amorçage Direct ISO + Attente Synchrone Boot    "
+echo "   Disque Système Ext4 Pré-installé (Zero ISO Loop)  "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_oreo_data"
@@ -19,8 +19,8 @@ pkill -9 -f nginx 2>/dev/null || true
 pkill -9 -f android-bridge 2>/dev/null || true
 pkill -9 -f adb 2>/dev/null || true
 
-# 2. Installation des paquets
-echo "=== 1. Installation des paquets ==="
+# 2. Installation des paquets requis
+echo "=== 1. Installation des paquets (squashfs, qemu, e2fsprogs) ==="
 sudo apt-get update -qq >/dev/null 2>&1 || true
 sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full squashfs-tools e2fsprogs >/dev/null 2>&1 || true
 
@@ -33,17 +33,44 @@ if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
   curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
 fi
 
-# 4. Extraction des composants de boot (kernel + initrd)
-echo "=== 2. Extraction du noyau et initrd ==="
-mkdir -p "$DATA_DIR/android_fs"
-7z x -y "$ISO_NAME" -o"$DATA_DIR/android_fs" kernel initrd.img >/dev/null 2>&1 || true
+# 4. Pré-installation système sur image Ext4
+INSTALLED_IMG="$DATA_DIR/android_installed.img"
+if [ ! -f "$INSTALLED_IMG" ]; then
+  echo "=== 2. Pré-installation du système Android sur disque ext4 ==="
+  
+  mkdir -p "$DATA_DIR/iso_extract"
+  7z x -y "$ISO_NAME" -o"$DATA_DIR/iso_extract" >/dev/null 2>&1 || true
+  
+  # Extraction de system.sfs -> system.img -> fichiers système
+  mkdir -p "$DATA_DIR/sqs_extract"
+  unsquashfs -f -d "$DATA_DIR/sqs_extract" "$DATA_DIR/iso_extract/system.sfs" >/dev/null 2>&1 || true
 
-# Partition de données ext4 pour Android
-if [ ! -f "data.img" ]; then
-  echo "Création de la partition de données ext4 (data.img)..."
-  qemu-img create -f raw data.img 3G
-  mkfs.ext4 -F -L "data" data.img >/dev/null 2>&1 || true
+  # Création de l'image disque ext4 6 Go
+  qemu-img create -f raw "$INSTALLED_IMG" 6G
+  mkfs.ext4 -F -L "AndroidOS" "$INSTALLED_IMG" >/dev/null 2>&1 || true
+
+  MOUNT_DISK="/tmp/mnt_disk"
+  MOUNT_SYS="/tmp/mnt_sys"
+  sudo mkdir -p "$MOUNT_DISK" "$MOUNT_SYS"
+
+  sudo mount -o loop "$INSTALLED_IMG" "$MOUNT_DISK"
+  sudo mount -o loop,ro "$DATA_DIR/sqs_extract/system.img" "$MOUNT_SYS"
+
+  echo "Copie du système Android sur le disque virtuel..."
+  sudo cp -a "$DATA_DIR/iso_extract/"* "$MOUNT_DISK/" 2>/dev/null || true
+  sudo mkdir -p "$MOUNT_DISK/system"
+  sudo cp -a "$MOUNT_SYS/"* "$MOUNT_DISK/system/" 2>/dev/null || true
+  sudo mkdir -p "$MOUNT_DISK/data"
+  sudo chmod -R 777 "$MOUNT_DISK/data"
+
+  sudo umount "$MOUNT_SYS" || true
+  sudo umount "$MOUNT_DISK" || true
+  sudo rm -rf "$MOUNT_DISK" "$MOUNT_SYS" "$DATA_DIR/sqs_extract" "$DATA_DIR/iso_extract"
 fi
+
+# Extraction locale du noyau & initrd pour lancement direct QEMU
+mkdir -p "$DATA_DIR/boot"
+7z x -y "$ISO_NAME" -o"$DATA_DIR/boot" kernel initrd.img >/dev/null 2>&1 || true
 
 # 5. Détection KVM
 KVM_FLAG=""
@@ -54,20 +81,19 @@ else
   KVM_FLAG="-cpu max"
 fi
 
-# 6. Démarrage QEMU avec CDROM ISO + disque de données (Mode VESA Portrait 720x1280)
-echo "=== 3. Démarrage QEMU Android (Portrait 720x1280) ==="
+# 6. Démarrage QEMU avec Disque Pré-installé (Boot direct ext4)
+echo "=== 3. Démarrage QEMU Android (Disque Ext4 Pré-installé) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
-  -m 3072 \
+  -m 3584 \
   -smp 2 \
   -vga std \
   -global VGA.vgamem_mb=64 \
   -vnc 127.0.0.1:0 \
-  -cdrom "$DATA_DIR/$ISO_NAME" \
-  -drive file="$DATA_DIR/data.img",format=raw,if=virtio \
-  -kernel "$DATA_DIR/android_fs/kernel" \
-  -initrd "$DATA_DIR/android_fs/initrd.img" \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug DATA=/dev/vda UVESA_MODE=720x1280 DPI=280 nomodeset xforcevesa quiet" \
+  -drive file="$INSTALLED_IMG",format=raw,if=virtio \
+  -kernel "$DATA_DIR/boot/kernel" \
+  -initrd "$DATA_DIR/boot/initrd.img" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data UVESA_MODE=720x1280 DPI=280 nomodeset xforcevesa quiet" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
@@ -140,9 +166,9 @@ NGINX_EOF
 sudo systemctl restart nginx || sudo service nginx restart
 
 # 10. Attente SYNCHRONE jusqu'à ce qu'Android soit 100% DÉMARRÉ et SUR LE LAUNCHER
-echo "=== 6. Attente synchrone du démarrage complet d'Android (sys.boot_completed) ==="
+echo "=== 6. Attente synchrone du boot Android complet (sys.boot_completed) ==="
 BOOT_SUCCESS=0
-for attempt in {1..60}; do
+for attempt in {1..70}; do
   sleep 4
   adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
   
@@ -169,7 +195,7 @@ for attempt in {1..60}; do
     sleep 3
     break
   else
-    echo "Attente du boot Android... (tentative $attempt/60)"
+    echo "Attente du boot Android... (tentative $attempt/70)"
   fi
 done
 
@@ -178,5 +204,5 @@ if [ "$BOOT_SUCCESS" = "1" ]; then
   echo " Android Smartphone Prêt & Fonctionnel !"
   echo "=================================================="
 else
-  echo "⚠️ Android est démarré en arrière-plan, passage à l'étape suivante..."
+  echo "Passage à l'étape suivante..."
 fi
