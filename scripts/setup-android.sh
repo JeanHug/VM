@@ -3,7 +3,7 @@ set -e
 
 echo "=================================================="
 echo "   LANCEMENT OFFICIEL ANDROID 14 (API 34)         "
-echo "   ARCHITECTURE NO-CRASH KASM / VNC INTÉGRÉE      "
+echo "   ARCHITECTURE KASM DOCKER-IN-DOCKER STABLE      "
 echo "=================================================="
 
 DATA_DIR="/home/runner/android_vm_data"
@@ -13,7 +13,6 @@ sudo chmod -R 777 "$DATA_DIR" 2>/dev/null || true
 # 1. Nettoyage absolu
 echo "=== 1. Nettoyage des processus et conteneurs ==="
 docker rm -f redroid14 redroid13 android_vm ws_scrcpy novnc_android android_vnc 2>/dev/null || true
-pkill -9 -f scrcpy 2>/dev/null || true
 pkill -9 -f nginx 2>/dev/null || true
 
 # 2. Noyau Linux KVM + BinderFS pour Android 14
@@ -74,8 +73,9 @@ adb shell input keyevent 82 2>/dev/null || true
 adb shell wm size 720x1560 2>/dev/null || true
 adb shell wm density 320 2>/dev/null || true
 
-# 5. Démarrage de l'environnement d'affichage Kasm / Desktop Mobile Ultra-Robuste
-echo "=== 5. Démarrage du moteur d'affichage Kasm (Zéro crash, zéro boucle de reconnexion) ==="
+# 5. Démarrage de Kasm Desktop pour Android
+echo "=== 5. Démarrage de Kasm Desktop Android ==="
+docker pull kasmweb/ubuntu-jammy-desktop:1.16.0
 docker run -d \
   --name android_vnc \
   --privileged \
@@ -87,31 +87,32 @@ docker run -d \
   kasmweb/ubuntu-jammy-desktop:1.16.0
 
 # 6. Attente que Kasm 6901 soit prêt
-echo "=== Attente de l'écoute du port Kasm 6901 ==="
-for i in {1..30}; do
-  if curl -k -s https://127.0.0.1:6901 >/dev/null 2>&1; then
-    echo " Port 6901 actif et sécurisé !"
+echo "=== Attente de l'initialisation de Kasm (Port 6901) ==="
+for i in {1..40}; do
+  if curl -s -k https://127.0.0.1:6901/ >/dev/null 2>&1; then
+    echo " Port 6901 Kasm actif !"
     break
   fi
   sleep 2
 done
 
-# 7. Lancement de scrcpy à l'intérieur du conteneur Kasm pour streaming natif
-echo "=== Configuration et lancement de scrcpy plein écran dans le conteneur ==="
-docker exec -u 0 android_vnc apt-get update -qq
-docker exec -u 0 android_vnc apt-get install -y -qq adb scrcpy >/dev/null 2>&1
+# 7. Lancement de scrcpy à l'intérieur du conteneur Kasm
+echo "=== Installation et lancement de scrcpy ==="
+docker exec -u 0 android_vnc bash -c "
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq >/dev/null 2>&1 || true
+  apt-get install -y -qq adb scrcpy >/dev/null 2>&1 || true
+"
 
-# Connexion ADB et exécution continue de scrcpy
 docker exec -u 1000 -d android_vnc bash -c "
-  adb connect host.docker.internal:5555 || adb connect 172.17.0.1:5555 || true
+  adb connect 172.17.0.1:5555 || true
   while true; do
-    DISPLAY=:1 scrcpy --serial=host.docker.internal:5555 --max-size=1560 --video-bit-rate=8M --max-fps=60 --window-title='Android14Screen' --fullscreen --disable-screensaver --stay-awake || \
-    DISPLAY=:1 scrcpy --serial=172.17.0.1:5555 --max-size=1560 --video-bit-rate=8M --max-fps=60 --window-title='Android14Screen' --fullscreen --disable-screensaver --stay-awake || true
+    DISPLAY=:1 scrcpy --serial=172.17.0.1:5555 --max-size=1560 --video-bit-rate=8M --max-fps=60 --fullscreen --disable-screensaver --stay-awake || true
     sleep 2
   done
 "
 
-# 8. Configuration NGINX Reverse-Proxy (Authentification Kasm automatique, bouton plein écran auto-hide)
+# 8. Configuration NGINX Reverse-Proxy
 echo "=== Configuration du reverse-proxy NGINX (Port 3000) ==="
 cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default > /dev/null
 server {
@@ -137,10 +138,6 @@ server {
         proxy_set_header Authorization "Basic a2FzbV91c2VyOnZuY3Bhc3M=";
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
-
-        sub_filter_types text/html;
-        sub_filter '</head>' '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><style>#fs-btn{position:fixed;bottom:24px;right:24px;z-index:999999;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:50px;padding:14px 22px;font-weight:700;font-size:14px;box-shadow:0 8px 24px rgba(16,185,129,0.45);cursor:pointer;display:flex;align-items:center;gap:8px;}#fs-btn:active{transform:scale(0.92);}</style><script>document.addEventListener("DOMContentLoaded",function(){var b=document.createElement("button");b.id="fs-btn";b.innerHTML="⛶ Plein Écran Immersion";b.onclick=function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(function(){});}else{document.exitFullscreen().catch(function(){});}};document.body.appendChild(b);document.addEventListener("fullscreenchange",function(){if(document.fullscreenElement){b.style.display="none";}else{b.style.display="flex";}});});</script></head>';
-        sub_filter_once on;
     }
 }
 NGINX_EOF
@@ -148,10 +145,10 @@ NGINX_EOF
 sudo nginx -t
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 9. Test de validation HTTP
+# 9. Test de validation HTTP NGINX
 echo "=== Test de validation HTTP NGINX ==="
 for i in {1..20}; do
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
+  CODE=$(curl -s -k -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
   echo "[Check $i/20] HTTP Port 3000: $CODE"
   if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
     echo " Port 3000 opérationnel avec Kasm !"
@@ -160,4 +157,4 @@ for i in {1..20}; do
   sleep 2
 done
 
-echo " Architecture Kasm + Android 14 déployée avec succès !"
+echo " Architecture Kasm + Android 14 prête !"
