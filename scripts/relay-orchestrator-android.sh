@@ -8,7 +8,7 @@ RELAY_TRIGGER_MINS="${RELAY_TRIGGER_MINS:-315}"
 RELAY_SHUTDOWN_MINS="${RELAY_SHUTDOWN_MINS:-345}"
 
 echo "=================================================="
-echo "    ORCHESTRATEUR DE RELAIS VM ANDROID 13        "
+echo "    ORCHESTRATEUR DE RELAIS VM ANDROID 14         "
 echo "=================================================="
 echo "Cycle actuel       : $RELAY_CYCLE"
 echo "ID de session      : $SESSION_ID"
@@ -24,6 +24,17 @@ SHUTDOWN_TIME=$((START_TIME + RELAY_SHUTDOWN_MINS * 60))
 
 RELAY_TRIGGERED=false
 
+cleanup_and_exit() {
+  echo "Arrêt ordonné et sauvegarde finale..."
+  ./scripts/backup-sync-android.sh backup "$SESSION_ID" || true
+  pkill -f cloudflared || true
+  pkill -f "nokey@localhost.run" || true
+  docker stop redroid14 android_kasm 2>/dev/null || true
+  exit 0
+}
+
+trap cleanup_and_exit SIGTERM SIGINT
+
 trigger_next_relay() {
   NEXT_CYCLE=$((RELAY_CYCLE + 1))
   echo "=================================================="
@@ -31,14 +42,13 @@ trigger_next_relay() {
   echo "=================================================="
 
   if [ -n "$GH_TOKEN" ] && [ -n "$GITHUB_REPOSITORY" ]; then
-    # Synchronisation immédiate avant lancement du nouveau runner
     ./scripts/backup-sync-android.sh backup "$SESSION_ID" || true
 
     curl -s -X POST \
       -H "Authorization: Bearer $GH_TOKEN" \
       -H "Accept: application/vnd.github.v3+json" \
       "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/vm-android.yml/dispatches" \
-      -d "{\"ref\":\"main\",\"inputs\":{\"relay_cycle\":\"$NEXT_CYCLE\",\"session_id\":\"$SESSION_ID\",\"relay_trigger_mins\":\"$RELAY_TRIGGER_MINS\",\"relay_shutdown_mins\":\"$RELAY_SHUTDOWN_MINS\"}}"
+      -d "{\"ref\":\"main\",\"inputs\":{\"relay_cycle\":\"$NEXT_CYCLE\",\"session_id\":\"$SESSION_ID\",\"relay_trigger_mins\":\"$RELAY_TRIGGER_MINS\",\"relay_shutdown_mins\":\"$RELAY_SHUTDOWN_MINS\"}}" || true
     
     echo " Relais Android cycle $NEXT_CYCLE déclenché avec succès !"
     RELAY_TRIGGERED=true
@@ -55,9 +65,7 @@ while true; do
   # 1. Vérification de l'arrêt
   if [ "$NOW" -ge "$SHUTDOWN_TIME" ]; then
     echo "=== Heure d'arrêt atteinte (${RELAY_SHUTDOWN_MINS}m) ==="
-    ./scripts/backup-sync-android.sh backup "$SESSION_ID" || true
-    echo "Cycle $RELAY_CYCLE terminé proprement."
-    exit 0
+    cleanup_and_exit
   fi
 
   # 2. Déclenchement du relais si l'heure est venue
@@ -72,9 +80,9 @@ while true; do
     NEXT_SYNC=$((NOW + SYNC_INTERVAL_MINS * 60))
   fi
 
-  # 4. Vérification que le tunnel reste actif
+  # 4. Maintien et relance automatique du tunnel Cloudflare
   if ! pgrep -f cloudflared > /dev/null; then
-    echo "⚠️ Cloudflared tombé, relance..."
+    echo "⚠️ Processus Cloudflared absent, relance immédiate..."
     ./scripts/start-tunnel-android.sh || true
   fi
 
