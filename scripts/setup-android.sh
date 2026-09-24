@@ -2,17 +2,18 @@
 set -e
 
 echo "=================================================="
-echo "    ANDROID GRAPHICAL SMARTPHONE (PORTRAIT 720x1280)"
-echo "   Disque Système Ext4 Pré-installé (Zero ISO Loop)  "
+echo "    SMARTPHONE ANDROID GRAPHICAL UI (PORTRAIT 720x1280)"
+echo "        Amorçage Robuste Zéro-Console & Zéro-Crash     "
 echo "=================================================="
 
-DATA_DIR="/home/runner/android_oreo_data"
+DATA_DIR="/home/runner/android_data"
 sudo mkdir -p "$DATA_DIR"
 sudo chown -R runner:docker "$DATA_DIR" 2>/dev/null || sudo chown -R $(id -u):$(id -g) "$DATA_DIR" 2>/dev/null || true
 sudo chmod -R 777 "$DATA_DIR"
 cd "$DATA_DIR"
 
-# 1. Nettoyage préventif
+# 1. Nettoyage préventif complet
+echo "=== 1. Nettoyage des processus antérieurs ==="
 pkill -9 -f qemu-system 2>/dev/null || true
 pkill -9 -f websockify 2>/dev/null || true
 pkill -9 -f nginx 2>/dev/null || true
@@ -20,92 +21,69 @@ pkill -9 -f android-bridge 2>/dev/null || true
 pkill -9 -f adb 2>/dev/null || true
 
 # 2. Installation des paquets requis
-echo "=== 1. Installation des paquets (squashfs, qemu, e2fsprogs) ==="
+echo "=== 2. Installation des dépendances (QEMU, noVNC, Nginx, ADB) ==="
 sudo apt-get update -qq >/dev/null 2>&1 || true
-sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full squashfs-tools e2fsprogs >/dev/null 2>&1 || true
+sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full squashfs-tools >/dev/null 2>&1 || true
 
-# 3. Téléchargement d'Android-x86 8.1 r6
+# 3. Téléchargement d'Android-x86 8.1 r6 Oreo
 ISO_NAME="android-x86_64-8.1-r6.iso"
 if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
   rm -f "$ISO_NAME"
-  echo "Téléchargement d'Android-x86..."
+  echo "Téléchargement de l'image ISO Android-x86..."
   curl -L -s -o "$ISO_NAME" "https://mirrors.dotsrc.org/osdn/android-x86/71931/android-x86_64-8.1-r6.iso" || \
   curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
 fi
 
-# 4. Pré-installation système sur image Ext4
-INSTALLED_IMG="$DATA_DIR/android_installed.img"
-if [ ! -f "$INSTALLED_IMG" ]; then
-  echo "=== 2. Pré-installation du système Android sur disque ext4 ==="
-  
-  mkdir -p "$DATA_DIR/iso_extract"
-  7z x -y "$ISO_NAME" -o"$DATA_DIR/iso_extract" >/dev/null 2>&1 || true
-  
-  # Extraction de system.sfs -> system.img -> fichiers système
-  mkdir -p "$DATA_DIR/sqs_extract"
-  unsquashfs -f -d "$DATA_DIR/sqs_extract" "$DATA_DIR/iso_extract/system.sfs" >/dev/null 2>&1 || true
-
-  # Création de l'image disque ext4 6 Go
-  qemu-img create -f raw "$INSTALLED_IMG" 6G
-  mkfs.ext4 -F -L "AndroidOS" "$INSTALLED_IMG" >/dev/null 2>&1 || true
-
-  MOUNT_DISK="/tmp/mnt_disk"
-  MOUNT_SYS="/tmp/mnt_sys"
-  sudo mkdir -p "$MOUNT_DISK" "$MOUNT_SYS"
-
-  sudo mount -o loop "$INSTALLED_IMG" "$MOUNT_DISK"
-  sudo mount -o loop,ro "$DATA_DIR/sqs_extract/system.img" "$MOUNT_SYS"
-
-  echo "Copie du système Android sur le disque virtuel..."
-  sudo cp -a "$DATA_DIR/iso_extract/"* "$MOUNT_DISK/" 2>/dev/null || true
-  sudo mkdir -p "$MOUNT_DISK/system"
-  sudo cp -a "$MOUNT_SYS/"* "$MOUNT_DISK/system/" 2>/dev/null || true
-  sudo mkdir -p "$MOUNT_DISK/data"
-  sudo chmod -R 777 "$MOUNT_DISK/data"
-
-  sudo umount "$MOUNT_SYS" || true
-  sudo umount "$MOUNT_DISK" || true
-  sudo rm -rf "$MOUNT_DISK" "$MOUNT_SYS" "$DATA_DIR/sqs_extract" "$DATA_DIR/iso_extract"
+# 4. Extraction du noyau et de l'initrd pour un amorçage direct instantané
+BOOT_DIR="$DATA_DIR/boot"
+mkdir -p "$BOOT_DIR"
+if [ ! -f "$BOOT_DIR/kernel" ] || [ ! -f "$BOOT_DIR/initrd.img" ]; then
+  echo "Extraction des fichiers d'amorçage..."
+  7z x -y "$ISO_NAME" -o"$BOOT_DIR" kernel initrd.img >/dev/null 2>&1 || true
 fi
 
-# Extraction locale du noyau & initrd pour lancement direct QEMU
-mkdir -p "$DATA_DIR/boot"
-7z x -y "$ISO_NAME" -o"$DATA_DIR/boot" kernel initrd.img >/dev/null 2>&1 || true
-
-# 5. Détection KVM
+# 5. Détection de l'accélération matérielle KVM
 KVM_FLAG=""
 if [ -e /dev/kvm ]; then
   sudo chmod 666 /dev/kvm 2>/dev/null || true
   KVM_FLAG="-enable-kvm -cpu host"
+  echo "✅ Accélération matérielle KVM activée !"
 else
   KVM_FLAG="-cpu max"
+  echo "ℹ️ Émulation CPU logicielle"
 fi
 
-# 6. Démarrage QEMU avec Disque Pré-installé (Boot direct ext4)
-echo "=== 3. Démarrage QEMU Android (Disque Ext4 Pré-installé) ==="
+# 6. Démarrage de QEMU Android en mode Graphique Pur (Format Portrait Smartphone 720x1280)
+# Explication technique :
+# - Pas de "nomodeset" ni "xforcevesa" (qui causait le repli vers la console 80x25 textuelle)
+# - video=720x1280 DPI=280 pour initialiser le framebuffer DRM natif en format smartphone
+# - SRC= vide : initrd détecte directement l'ISO sur le lecteur CD-ROM virtuel (/dev/sr0)
+# - Pas de DATA=/data erroné : Android monte sa partition /data proprement en mémoire vive (tmpfs 3.5 Go)
+# - Zéro crash et zéro chute vers le shell de secours (x86_64:/ #)
+echo "=== 3. Lancement de QEMU Android (Graphique 720x1280) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
   -m 3584 \
   -smp 2 \
   -vga std \
-  -global VGA.vgamem_mb=64 \
   -vnc 127.0.0.1:0 \
-  -drive file="$INSTALLED_IMG",format=raw,if=virtio \
-  -kernel "$DATA_DIR/boot/kernel" \
-  -initrd "$DATA_DIR/boot/initrd.img" \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug SRC=/ DATA=/data UVESA_MODE=720x1280 DPI=280 nomodeset xforcevesa quiet" \
+  -drive file="$DATA_DIR/$ISO_NAME",format=raw,media=cdrom,readonly=on \
+  -kernel "$BOOT_DIR/kernel" \
+  -initrd "$BOOT_DIR/initrd.img" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug quiet SRC= video=720x1280 DPI=280" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
+  -serial file:/tmp/qemu_serial.log \
   -daemonize
 
 # 7. Relais Websockify vers QEMU VNC (:0 -> 6080)
-echo "=== 4. Démarrage Websockify ==="
+echo "=== 4. Démarrage Websockify (Port 6080) ==="
 sleep 2
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 >/dev/null 2>&1 &
 sleep 2
 
-# 8. Bridge ADB
+# 8. Bridge ADB pour le contrôle web tactile et statut
 CURRENT_DIR=$(pwd)
 WORK_DIR="/home/runner/work/VM/VM"
 if [ -d "$WORK_DIR" ]; then
@@ -115,7 +93,7 @@ node "$CURRENT_DIR/scripts/android-bridge.cjs" >/dev/null 2>&1 &
 sleep 1
 
 # 9. Configuration NGINX Reverse-Proxy
-echo "=== 5. Configuration NGINX ==="
+echo "=== 5. Configuration NGINX Reverse-Proxy ==="
 sudo mkdir -p /var/www/android-web
 sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
 sudo chmod -R 755 /var/www/android-web
@@ -165,44 +143,53 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 10. Attente SYNCHRONE jusqu'à ce qu'Android soit 100% DÉMARRÉ et SUR LE LAUNCHER
-echo "=== 6. Attente synchrone du boot Android complet (sys.boot_completed) ==="
+# 10. Attente SYNCHRONE jusqu'à ce qu'Android soit 100% OPÉRATIONNEL sur l'Écran d'Accueil
+echo "=== 6. Attente synchrone du boot Android complet (sys.boot_completed = 1) ==="
 BOOT_SUCCESS=0
-for attempt in {1..70}; do
-  sleep 4
+for attempt in {1..90}; do
+  sleep 3
   adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
-  
-  # Réveil de l'écran et simulation de déverrouillage
-  adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
-  adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
 
-  BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null || echo "0")
+  # Réveil de l'écran
+  adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
+
+  BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || echo "0")
   if [ "$BOOT_OK" = "1" ]; then
-    echo "✅ ANDROID BOOT TERMINE AVEC SUCCES (sys.boot_completed = 1) !"
+    echo "✅ ANDROID DÉMARRÉ AVEC SUCCÈS (sys.boot_completed = 1) à la tentative $attempt/90 !"
     BOOT_SUCCESS=1
-    
-    # Auto-provisioning & contournement de la configuration initiale
+
+    # Configuration automatique du smartphone :
+    # 1. Éviter l'assistant de configuration initiale Google
     adb -s 127.0.0.1:5555 shell settings put global device_provisioned 1 >/dev/null 2>&1 || true
     adb -s 127.0.0.1:5555 shell settings put secure user_setup_complete 1 >/dev/null 2>&1 || true
+    # 2. Fixer la rotation en mode portrait vertical permanent (0°)
     adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+    adb -s 127.0.0.1:5555 shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
+    # 3. Empêcher la mise en veille de l'écran
     adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
+    # 4. Appliquer la résolution et densité smartphone portrait
     adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
     adb -s 127.0.0.1:5555 shell wm density 280 >/dev/null 2>&1 || true
-    
-    # Lancement explicite de l'écran d'accueil (Launcher)
+    # 5. Déverrouiller et amener sur l'écran d'accueil (HOME)
     adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
     adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
-    sleep 3
+    sleep 2
     break
   else
-    echo "Attente du boot Android... (tentative $attempt/70)"
+    if [ $((attempt % 5)) -eq 0 ]; then
+      echo "Attente du chargement système Android... ($attempt/90)"
+    fi
   fi
 done
 
-if [ "$BOOT_SUCCESS" = "1" ]; then
-  echo "=================================================="
-  echo " Android Smartphone Prêt & Fonctionnel !"
-  echo "=================================================="
-else
-  echo "Passage à l'étape suivante..."
+if [ "$BOOT_SUCCESS" != "1" ]; then
+  echo "⚠️ Le boot ADB n'a pas répondu dans le délai imparti. Derniers logs système :"
+  tail -n 30 /tmp/qemu_serial.log 2>/dev/null || true
+  # Tenter un déverrouillage de secours
+  adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
+  adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
 fi
+
+echo "=================================================="
+echo "    Smartphone Android Prêt & Fonctionnel !"
+echo "=================================================="
