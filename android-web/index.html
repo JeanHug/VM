@@ -31,54 +31,55 @@
       justify-content: center;
     }
 
-    /* CONTENEUR PRINCIPAL DU SMARTPHONE */
+    /* CONTENEUR PRINCIPAL DU SMARTPHONE - EXACT RATIO 9:16 DU TÉLÉPHONE */
     #phoneWrapper {
       position: relative;
-      width: 420px;
-      height: 840px;
-      max-width: 95vw;
+      width: min(390px, 90vh * (9 / 16));
+      aspect-ratio: 9 / 16;
       max-height: 92vh;
       background: #000000;
       border-radius: 44px;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 12px #18181b, 0 0 0 14px #27272a;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 10px #18181b, 0 0 0 12px #27272a;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* MODE DÉTECTÉ / PLEIN ÉCRAN FLUIDE SANS AUCUN CADRE NI BOUTON */
+    /* MODE PLEIN ÉCRAN TOTAL SANS CADRE */
     body.fullscreen-detected #phoneWrapper {
       width: 100vw !important;
       height: 100vh !important;
       max-width: 100vw !important;
       max-height: 100vh !important;
+      aspect-ratio: auto !important;
       border-radius: 0 !important;
       box-shadow: none !important;
     }
 
-    /* ENCOCHE DU SMARTPHONE (Visible seulement en mode normal) */
+    /* ENCOCHE DU SMARTPHONE */
     #phoneNotch {
       position: absolute;
       top: 0;
       left: 50%;
       transform: translateX(-50%);
-      width: 150px;
-      height: 24px;
+      width: 140px;
+      height: 22px;
       background: #18181b;
-      border-bottom-left-radius: 16px;
-      border-bottom-right-radius: 16px;
+      border-bottom-left-radius: 14px;
+      border-bottom-right-radius: 14px;
       z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
+      pointer-events: none;
     }
     .speaker {
-      width: 48px;
-      height: 4px;
+      width: 44px;
+      height: 3px;
       background: #3f3f46;
-      border-radius: 3px;
+      border-radius: 2px;
     }
     .camera {
       width: 8px;
@@ -98,9 +99,10 @@
       height: 100%;
       border: none;
       background: #000000;
+      display: block;
     }
 
-    /* BOUTON FLOTTANT PLEIN ÉCRAN (DISPARAÎT COMPLÈTEMENT EN PLEIN ÉCRAN) */
+    /* BOUTON FLOTTANT PLEIN ÉCRAN */
     #toggleModeBtn {
       position: fixed;
       top: 18px;
@@ -125,7 +127,6 @@
       background: rgba(5, 150, 105, 1);
       transform: scale(1.04);
     }
-    /* LE BOUTON DISPARAÎT TOTALEMENT EN PLEIN ÉCRAN SELON LA DEMANDE */
     body.fullscreen-detected #toggleModeBtn {
       display: none !important;
     }
@@ -137,7 +138,7 @@
       left: 0;
       width: 100%;
       height: 48px;
-      background: rgba(10, 10, 12, 0.92);
+      background: rgba(10, 10, 12, 0.94);
       backdrop-filter: blur(12px);
       display: flex;
       align-items: center;
@@ -169,7 +170,7 @@
       fill: currentColor;
     }
 
-    /* INPUT INVISIBLE POUR CLAVIER VIRTUEL NID DU SMARTPHONE */
+    /* INPUT INVISIBLE POUR CLAVIER VIRTUEL DU TÉLÉPHONE */
     #hiddenKeyboardInput {
       position: fixed;
       top: -100px;
@@ -180,7 +181,7 @@
       pointer-events: none;
     }
 
-    /* ÉCRAN DE CHARGEMENT */
+    /* ÉCRAN DE CHARGEMENT INTELLIGENT */
     #loadingScreen {
       position: absolute;
       top: 0;
@@ -193,28 +194,39 @@
       align-items: center;
       justify-content: center;
       z-index: 2000;
-      transition: opacity 0.3s;
+      transition: opacity 0.4s ease;
+      padding: 24px;
+      text-align: center;
     }
     .loader-spin {
-      width: 42px;
-      height: 42px;
-      border: 3px solid rgba(255, 255, 255, 0.1);
+      width: 44px;
+      height: 44px;
+      border: 3.5px solid rgba(255, 255, 255, 0.12);
       border-top-color: #10b981;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    .phone-icon-pulse {
+      font-size: 36px;
+      margin-bottom: 12px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.1); opacity: 1; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Input caché pour invoquer le clavier tactile du smartphone de l'utilisateur sans UI inutile -->
+  <!-- Input invisible pour saisie au clavier -->
   <input type="text" id="hiddenKeyboardInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 
-  <!-- Bouton de Bascule Mode Normal -> Plein Écran (Disparaît dès qu'on est en plein écran) -->
+  <!-- Bouton Plein Écran -->
   <button id="toggleModeBtn" onclick="enableFullscreenMode()">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
@@ -232,9 +244,10 @@
 
     <!-- Écran de Chargement Initial -->
     <div id="loadingScreen">
+      <div class="phone-icon-pulse">📱</div>
       <div class="loader-spin"></div>
-      <div style="font-weight: 600; color: #fff; font-size: 15px; margin-bottom: 4px;">Android 8.1 Oreo</div>
-      <div style="color: #a1a1aa; font-size: 13px;">Démarrage affichage QEMU direct...</div>
+      <div style="font-weight: 700; color: #fff; font-size: 16px; margin-bottom: 6px;">Android Smartphone</div>
+      <div id="loadingStatusText" style="color: #a1a1aa; font-size: 13px; max-width: 260px;">Initialisation de l'affichage Android...</div>
     </div>
 
     <!-- Flux Direct noVNC -->
@@ -254,7 +267,7 @@
       <button class="nav-icon-btn" onclick="sendAndroidKey('appswitch')" title="Récents">
         <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>
       </button>
-      <!-- Bouton Clavier Direct : Ouvre le clavier et retransmet chaque frappe instantanément -->
+      <!-- Bouton Clavier Direct -->
       <button class="nav-icon-btn" style="color:#10b981;" onclick="openVirtualKeyboard()" title="Clavier">
         <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
       </button>
@@ -264,18 +277,55 @@
   <script>
     const streamFrame = document.getElementById('streamFrame');
     const loadingScreen = document.getElementById('loadingScreen');
+    const loadingStatusText = document.getElementById('loadingStatusText');
     const hiddenInput = document.getElementById('hiddenKeyboardInput');
 
-    // Chargement du flux noVNC
+    // Chargement du flux noVNC dans le cadre
     streamFrame.src = '/vnc.html?autoconnect=true&resize=scale&quality=9&compression=0&show_dot=false';
+
+    let hasBootCompleted = false;
+
+    // Masquage fluide du chargement une fois le boot validé
+    function hideLoadingOverlay() {
+      if (hasBootCompleted) return;
+      hasBootCompleted = true;
+      loadingScreen.style.opacity = '0';
+      setTimeout(() => {
+        loadingScreen.style.display = 'none';
+      }, 400);
+    }
+
+    // Vérification active du statut Android via l'API du bridge
+    async function checkBootStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.bootCompleted) {
+            hideLoadingOverlay();
+            return;
+          } else {
+            loadingStatusText.textContent = "Démarrage du système Android en cours...";
+          }
+        }
+      } catch (e) {
+        // En attente
+      }
+    }
+
+    // Polling du statut toutes les 1.5s
+    const statusInterval = setInterval(checkBootStatus, 1500);
+    checkBootStatus();
+
+    // Sécurité : au bout de 12 secondes après le chargement iframe, masquer le loader
     streamFrame.onload = () => {
       setTimeout(() => {
-        loadingScreen.style.opacity = '0';
-        setTimeout(() => loadingScreen.style.display = 'none', 300);
-      }, 600);
+        hideLoadingOverlay();
+        clearInterval(statusInterval);
+      }, 12000);
     };
 
-    // Mode Plein Écran (Le bouton disparaît en plein écran)
+    // Mode Plein Écran
     function enableFullscreenMode() {
       document.body.classList.add('fullscreen-detected');
       if (document.documentElement.requestFullscreen) {
@@ -285,12 +335,11 @@
 
     document.addEventListener('fullscreenchange', () => {
       if (!document.fullscreenElement) {
-        // En sortant du plein écran (Échap ou geste retour), réaffiche le cadre et le bouton
         document.body.classList.remove('fullscreen-detected');
       }
     });
 
-    // Gestion du Clavier Direct : ouvre le clavier natif et retransmet le texte tapé instantanément
+    // Gestion du clavier direct
     function openVirtualKeyboard() {
       hiddenInput.focus();
     }
@@ -298,7 +347,6 @@
     hiddenInput.addEventListener('input', (e) => {
       const val = hiddenInput.value;
       if (val.length > 0) {
-        // Envoi direct sans aucune boîte intermédiaire
         fetch('/api/type', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
