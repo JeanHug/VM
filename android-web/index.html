@@ -248,6 +248,7 @@
       <div class="loader-spin"></div>
       <div style="font-weight: 700; color: #fff; font-size: 16px; margin-bottom: 6px;">Android Smartphone</div>
       <div id="loadingStatusText" style="color: #a1a1aa; font-size: 13px; max-width: 260px;">Initialisation de l'affichage Android...</div>
+      <button onclick="hideLoadingOverlay()" style="margin-top: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #e4e4e7; border-radius: 20px; padding: 6px 14px; font-size: 11px; cursor: pointer;">Afficher l'écran en direct</button>
     </div>
 
     <!-- Flux Direct noVNC -->
@@ -364,12 +365,11 @@
       } catch (e) {}
     }
 
-    // Sécurité : au bout de 14 secondes après le chargement iframe, masquer le loader
+    // Sécurité : masquer le loader après 5 secondes pour permettre de voir l'amorçage Android
     streamFrame.onload = () => {
       setTimeout(() => {
         hideLoadingOverlay();
-        clearInterval(statusInterval);
-      }, 14000);
+      }, 5000);
     };
 
     // Mode Plein Écran

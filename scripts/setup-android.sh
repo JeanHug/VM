@@ -62,14 +62,21 @@ else
   echo "ℹ️ Émulation CPU logicielle"
 fi
 
-# 6. Démarrage de QEMU Android en mode Graphique Pur (Format Portrait Smartphone 720x1280)
-# Explication technique :
-# - Pas de "nomodeset" ni "xforcevesa" (qui causait le repli vers la console 80x25 textuelle)
-# - video=720x1280 DPI=280 pour initialiser le framebuffer DRM natif en format smartphone
-# - SRC= vide : initrd détecte directement l'ISO sur le lecteur CD-ROM virtuel (/dev/sr0)
-# - Pas de DATA=/data erroné : Android monte sa partition /data proprement en mémoire vive (tmpfs 3.5 Go)
-# - Zéro crash et zéro chute vers le shell de secours (x86_64:/ #)
-echo "=== 3. Lancement de QEMU Android (Graphique VirtIO 720x1280) ==="
+# 6. Initialisation du Disque Persistant (Option 3 : android.qcow2)
+QCOW_DISK="$DATA_DIR/android.qcow2"
+if [ ! -f "$QCOW_DISK" ]; then
+  echo "=== Initialisation du disque persistant Android (android.qcow2 8 Go) ==="
+  truncate -s 8G "$DATA_DIR/android_raw.img"
+  mkfs.ext4 -F -L "AndroidData" -O ^metadata_csum "$DATA_DIR/android_raw.img" >/dev/null 2>&1 || true
+  qemu-img convert -f raw -O qcow2 "$DATA_DIR/android_raw.img" "$QCOW_DISK"
+  rm -f "$DATA_DIR/android_raw.img"
+  echo "✅ Disque persistant vierge initialisé avec succès : $QCOW_DISK"
+else
+  echo "✅ Disque persistant existant détecté : $QCOW_DISK ($(stat -c%s "$QCOW_DISK" 2>/dev/null || echo 0) octets) - Amorçage accéléré (< 30s) !"
+fi
+
+# 7. Démarrage de QEMU Android (Graphique VirtIO 720x1280 + Disque Persistant VirtIO)
+echo "=== 3. Lancement de QEMU Android (Graphique VirtIO 720x1280 + Disque Persistant) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
   -m 4096 \
@@ -77,17 +84,18 @@ qemu-system-x86_64 \
   -vga none \
   -device virtio-vga,xres=720,yres=1280 \
   -vnc 127.0.0.1:0 \
+  -drive file="$QCOW_DISK",format=qcow2,if=virtio,index=0 \
   -drive file="$DATA_DIR/$ISO_NAME",format=raw,media=cdrom,readonly=on \
   -kernel "$BOOT_DIR/kernel" \
   -initrd "$BOOT_DIR/initrd.img" \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug quiet SETUPWIZARD=0 HWACCEL=0 androidboot.adb.port=5555 video=720x1280 DPI=280 SRC=" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug quiet SETUPWIZARD=0 HWACCEL=0 androidboot.adb.port=5555 video=720x1280 DPI=280 SRC= DATA=/dev/vda" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
   -serial file:/tmp/qemu_serial.log \
   -daemonize
 
-# 7. Personnalisation noVNC : suppression totale de la barre et languette latérale
+# 8. Personnalisation noVNC : suppression totale de la barre et languette latérale
 echo "=== 4. Personnalisation & Démarrage Websockify (Port 6080) ==="
 sudo tee -a /usr/share/novnc/app/styles/base.css > /dev/null << 'NO_VNC_CSS'
 #noVNC_control_bar_anchor, #noVNC_control_bar, #noVNC_status {
@@ -104,7 +112,7 @@ sleep 2
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 >/dev/null 2>&1 &
 sleep 2
 
-# 8. Bridge ADB pour le contrôle web tactile et statut
+# 9. Bridge ADB pour le contrôle web tactile et statut
 CURRENT_DIR=$(pwd)
 WORK_DIR="/home/runner/work/VM/VM"
 if [ -d "$WORK_DIR" ]; then
@@ -113,7 +121,7 @@ fi
 node "$CURRENT_DIR/scripts/android-bridge.cjs" >/dev/null 2>&1 &
 sleep 1
 
-# 9. Configuration NGINX Reverse-Proxy
+# 10. Configuration NGINX Reverse-Proxy
 echo "=== 5. Configuration NGINX Reverse-Proxy ==="
 sudo mkdir -p /var/www/android-web
 sudo cp -r "$CURRENT_DIR/android-web/"* /var/www/android-web/
@@ -164,61 +172,61 @@ NGINX_EOF
 
 sudo systemctl restart nginx || sudo service nginx restart
 
-# 10. Attente SYNCHRONE jusqu'à ce qu'Android soit 100% OPÉRATIONNEL sur l'Écran d'Accueil
-echo "=== 6. Attente synchrone du boot Android complet (sys.boot_completed = 1) ==="
-BOOT_SUCCESS=0
-for attempt in {1..120}; do
-  sleep 3
-  adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
-
-  # Détection et réinitialisation si ADB est coincé en offline
-  if adb devices 2>/dev/null | grep -q "offline"; then
-    adb disconnect 127.0.0.1:5555 >/dev/null 2>&1 || true
-    sleep 1
+# 11. Surveillance & Configuration ADB Asynchrone (Option 1 : Zéro-Blocage du Workflow)
+echo "=== 6. Lancement du démon asynchrone de surveillance et provisionnement Android ==="
+nohup bash -c '
+  echo "[$(date -u +%T)] Démarrage du démon ADB background..." >> /tmp/android_provision.log
+  for attempt in {1..150}; do
+    sleep 2
     adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
-  fi
 
-  # Impulsion de réveil et déverrouillage de l'écran
-  adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
-  adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
+    if adb devices 2>/dev/null | grep -q "offline"; then
+      adb disconnect 127.0.0.1:5555 >/dev/null 2>&1 || true
+      sleep 1
+      adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+    fi
 
-  BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || echo "0")
-  if [ "$BOOT_OK" = "1" ]; then
-    echo "✅ ANDROID DÉMARRÉ AVEC SUCCÈS (sys.boot_completed = 1) à la tentative $attempt/120 !"
-    BOOT_SUCCESS=1
-
-    # Configuration automatique du smartphone :
-    # 1. Éviter l'assistant de configuration initiale Google
-    adb -s 127.0.0.1:5555 shell settings put global device_provisioned 1 >/dev/null 2>&1 || true
-    adb -s 127.0.0.1:5555 shell settings put secure user_setup_complete 1 >/dev/null 2>&1 || true
-    # 2. Fixer la rotation en mode portrait vertical permanent (0°)
-    adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
-    adb -s 127.0.0.1:5555 shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
-    # 3. Empêcher la mise en veille de l'écran
-    adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
-    # 4. Appliquer la résolution et densité smartphone portrait
-    adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
-    adb -s 127.0.0.1:5555 shell wm density 280 >/dev/null 2>&1 || true
-    # 5. Déverrouiller et amener sur l'écran d'accueil (HOME)
+    # Réveil et déverrouillage préventif
     adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
     adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
-    sleep 2
-    break
-  else
-    if [ $((attempt % 5)) -eq 0 ]; then
-      echo "Attente du chargement système Android... ($attempt/120)"
+
+    BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d "\r\n" || echo "0")
+    if [ "$BOOT_OK" = "1" ]; then
+      echo "[$(date -u +%T)] ✅ ANDROID OPÉRATIONNEL (sys.boot_completed = 1) à la tentative $attempt !" >> /tmp/android_provision.log
+      
+      # 1. Éviter l assistant de configuration Google
+      adb -s 127.0.0.1:5555 shell settings put global device_provisioned 1 >/dev/null 2>&1 || true
+      adb -s 127.0.0.1:5555 shell settings put secure user_setup_complete 1 >/dev/null 2>&1 || true
+      # 2. Fixer la rotation en mode portrait vertical permanent (0°)
+      adb -s 127.0.0.1:5555 shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+      adb -s 127.0.0.1:5555 shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
+      # 3. Empêcher la mise en veille
+      adb -s 127.0.0.1:5555 shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
+      # 4. Appliquer résolution & densité smartphone
+      adb -s 127.0.0.1:5555 shell wm size 720x1280 >/dev/null 2>&1 || true
+      adb -s 127.0.0.1:5555 shell wm density 280 >/dev/null 2>&1 || true
+      # 5. Déverrouiller et amener sur l écran d accueil
+      adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
+      adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
+      sync || true
+      adb -s 127.0.0.1:5555 shell sync 2>/dev/null || true
+      echo "[$(date -u +%T)] ✅ Configuration smartphone appliquée avec succès !" >> /tmp/android_provision.log
+      break
     fi
+  done
+' > /dev/null 2>&1 &
+
+# Attente ultra-rapide que Nginx réponde localement (Option 1)
+echo "Vérification immédiate de la réactivité Nginx locale..."
+for i in {1..10}; do
+  if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ | grep -q "200\|302"; then
+    echo "✅ Port local 3000 prêt ! Le workflow passe directement au démarrage du tunnel Cloudflare."
+    break
   fi
+  sleep 1
 done
 
-if [ "$BOOT_SUCCESS" != "1" ]; then
-  echo "⚠️ Le boot ADB n'a pas répondu dans le délai imparti. Derniers logs système :"
-  tail -n 30 /tmp/qemu_serial.log 2>/dev/null || true
-  # Tenter un déverrouillage de secours
-  adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
-  adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
-fi
-
 echo "=================================================="
-echo "    Smartphone Android Prêt & Fonctionnel !"
+echo "    Smartphone Android & UI Web Prêts !"
+echo "    Tunnel Cloudflare en cours d'activation immédiate..."
 echo "=================================================="
