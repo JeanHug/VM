@@ -25,13 +25,22 @@ echo "=== 2. Installation des dépendances (QEMU, noVNC, Nginx, ADB) ==="
 sudo apt-get update -qq >/dev/null 2>&1 || true
 sudo apt-get install -y -qq qemu-system-x86 qemu-utils novnc websockify nginx adb wget curl p7zip-full squashfs-tools >/dev/null 2>&1 || true
 
-# 3. Téléchargement d'Android-x86 8.1 r6 Oreo
+# 3. Téléchargement d'Android-x86 8.1 r6 Oreo avec miroir haute vitesse et reprise automatique
 ISO_NAME="android-x86_64-8.1-r6.iso"
-if [ ! -f "$ISO_NAME" ] || [ ! -s "$ISO_NAME" ]; then
+if [ ! -f "$ISO_NAME" ] || [ $(stat -c%s "$ISO_NAME" 2>/dev/null || echo 0) -lt 500000000 ]; then
   rm -f "$ISO_NAME"
-  echo "Téléchargement de l'image ISO Android-x86..."
-  curl -L -s -o "$ISO_NAME" "https://mirrors.dotsrc.org/osdn/android-x86/71931/android-x86_64-8.1-r6.iso" || \
-  curl -L -s -o "$ISO_NAME" "https://sourceforge.net/projects/android-x86/files/Release%208.1/android-x86_64-8.1-r6.iso/download"
+  echo "Téléchargement de l'image ISO Android-x86 depuis SourceForge CDN..."
+  wget -q --show-progress --tries=5 --timeout=30 -c -O "$ISO_NAME" "https://downloads.sourceforge.net/project/android-x86/Release%208.1/android-x86_64-8.1-r6.iso" || \
+  curl -L --retry 5 --retry-delay 2 -o "$ISO_NAME" "https://downloads.sourceforge.net/project/android-x86/Release%208.1/android-x86_64-8.1-r6.iso" || \
+  curl -L --retry 3 -o "$ISO_NAME" "https://mirrors.dotsrc.org/osdn/android-x86/71931/android-x86_64-8.1-r6.iso"
+fi
+
+# Vérification de l'intégrité de l'ISO téléchargée
+ISO_SIZE=$(stat -c%s "$ISO_NAME" 2>/dev/null || echo 0)
+echo "Taille de l'ISO Android : $ISO_SIZE octets"
+if [ "$ISO_SIZE" -lt 500000000 ]; then
+  echo "❌ ERREUR: Le fichier ISO est incomplet ($ISO_SIZE octets)"
+  exit 1
 fi
 
 # 4. Extraction du noyau et de l'initrd pour un amorçage direct instantané
