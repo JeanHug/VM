@@ -271,6 +271,10 @@
       <button class="nav-icon-btn" style="color:#10b981;" onclick="openVirtualKeyboard()" title="Clavier">
         <svg viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>
       </button>
+      <!-- Bouton Déverrouiller / Réveiller -->
+      <button class="nav-icon-btn" style="color:#f59e0b;" onclick="wakePhone()" title="Déverrouiller l'écran">
+        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+      </button>
     </div>
   </div>
 
@@ -282,6 +286,40 @@
 
     // Chargement du flux noVNC dans le cadre
     streamFrame.src = '/vnc.html?autoconnect=true&resize=scale&quality=9&compression=0&show_dot=false';
+
+    // Injection CSS stricte dans noVNC pour supprimer la languette latérale
+    function injectNoVncOverrides() {
+      try {
+        const doc = streamFrame.contentDocument || (streamFrame.contentWindow && streamFrame.contentWindow.document);
+        if (doc && doc.head) {
+          const styleId = 'novnc-clean-style';
+          if (!doc.getElementById(styleId)) {
+            const st = doc.createElement('style');
+            st.id = styleId;
+            st.textContent = `
+              #noVNC_control_bar_anchor, #noVNC_control_bar, #noVNC_status, #noVNC_hint {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+              }
+              html, body, #noVNC_container {
+                overflow: hidden !important;
+                background-color: #000000 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+              }
+            `;
+            doc.head.appendChild(st);
+          }
+        }
+      } catch (e) {}
+    }
+
+    streamFrame.addEventListener('load', () => {
+      injectNoVncOverrides();
+      setInterval(injectNoVncOverrides, 1000);
+    });
 
     let hasBootCompleted = false;
 
@@ -317,12 +355,21 @@
     const statusInterval = setInterval(checkBootStatus, 1500);
     checkBootStatus();
 
-    // Sécurité : au bout de 12 secondes après le chargement iframe, masquer le loader
+    // Réveil & Déverrouillage manuel ou automatique
+    async function wakePhone() {
+      try {
+        await fetch('/api/wake');
+        await sendAndroidKey('menu');
+        await sendAndroidKey('home');
+      } catch (e) {}
+    }
+
+    // Sécurité : au bout de 14 secondes après le chargement iframe, masquer le loader
     streamFrame.onload = () => {
       setTimeout(() => {
         hideLoadingOverlay();
         clearInterval(statusInterval);
-      }, 12000);
+      }, 14000);
     };
 
     // Mode Plein Écran

@@ -7,8 +7,11 @@ const PORT = 8080;
 
 function runAdb(cmd) {
   return new Promise((resolve) => {
-    exec(`adb connect 127.0.0.1:5555 >/dev/null 2>&1; adb -s 127.0.0.1:5555 ${cmd}`, { timeout: 4000 }, (err, stdout, stderr) => {
+    exec(`adb connect 127.0.0.1:5555 >/dev/null 2>&1; adb -s 127.0.0.1:5555 ${cmd}`, { timeout: 4500 }, (err, stdout, stderr) => {
       if (err) {
+        if (String(stderr).includes('offline')) {
+          exec('adb disconnect 127.0.0.1:5555 >/dev/null 2>&1; sleep 1; adb connect 127.0.0.1:5555 >/dev/null 2>&1');
+        }
         resolve({ success: false, error: err.message, stderr: String(stderr) });
       } else {
         resolve({ success: true, stdout: (stdout || '').trim() });
@@ -29,6 +32,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // API: Wake & Unlock Phone
+  if (url.pathname === '/api/wake') {
+    await runAdb('shell input keyevent 82'); // Menu / Unlock
+    await runAdb('shell input keyevent 3');  // Home
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: 'Screen unlocked and Home screen requested' }));
+    return;
+  }
+
+  // API: Reconnect ADB
+  if (url.pathname === '/api/reconnect') {
+    exec('adb disconnect 127.0.0.1:5555; sleep 1; adb connect 127.0.0.1:5555', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+    });
+    return;
+  }
 
   // API: Health / Status
   if (url.pathname === '/api/status') {

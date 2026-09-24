@@ -69,25 +69,37 @@ fi
 # - SRC= vide : initrd détecte directement l'ISO sur le lecteur CD-ROM virtuel (/dev/sr0)
 # - Pas de DATA=/data erroné : Android monte sa partition /data proprement en mémoire vive (tmpfs 3.5 Go)
 # - Zéro crash et zéro chute vers le shell de secours (x86_64:/ #)
-echo "=== 3. Lancement de QEMU Android (Graphique 720x1280) ==="
+echo "=== 3. Lancement de QEMU Android (Graphique VirtIO 720x1280) ==="
 qemu-system-x86_64 \
   $KVM_FLAG \
-  -m 3584 \
+  -m 4096 \
   -smp 2 \
-  -vga std \
+  -vga none \
+  -device virtio-vga,xres=720,yres=1280 \
   -vnc 127.0.0.1:0 \
   -drive file="$DATA_DIR/$ISO_NAME",format=raw,media=cdrom,readonly=on \
   -kernel "$BOOT_DIR/kernel" \
   -initrd "$BOOT_DIR/initrd.img" \
-  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug quiet SRC= video=720x1280 DPI=280" \
+  -append "root=/dev/ram0 androidboot.hardware=android_x86 androidboot.selinux=permissive buildvariant=userdebug quiet SETUPWIZARD=0 HWACCEL=0 androidboot.adb.port=5555 video=720x1280 DPI=280 SRC=" \
   -net nic,model=virtio \
   -net user,hostfwd=tcp::5555-:5555 \
   -usb -device usb-tablet \
   -serial file:/tmp/qemu_serial.log \
   -daemonize
 
-# 7. Relais Websockify vers QEMU VNC (:0 -> 6080)
-echo "=== 4. Démarrage Websockify (Port 6080) ==="
+# 7. Personnalisation noVNC : suppression totale de la barre et languette latérale
+echo "=== 4. Personnalisation & Démarrage Websockify (Port 6080) ==="
+sudo tee -a /usr/share/novnc/app/styles/base.css > /dev/null << 'NO_VNC_CSS'
+#noVNC_control_bar_anchor, #noVNC_control_bar, #noVNC_status {
+  display: none !important;
+  visibility: hidden !important;
+}
+body {
+  overflow: hidden !important;
+  background-color: #000000 !important;
+}
+NO_VNC_CSS
+
 sleep 2
 websockify --web /usr/share/novnc 6080 127.0.0.1:5900 >/dev/null 2>&1 &
 sleep 2
@@ -155,16 +167,24 @@ sudo systemctl restart nginx || sudo service nginx restart
 # 10. Attente SYNCHRONE jusqu'à ce qu'Android soit 100% OPÉRATIONNEL sur l'Écran d'Accueil
 echo "=== 6. Attente synchrone du boot Android complet (sys.boot_completed = 1) ==="
 BOOT_SUCCESS=0
-for attempt in {1..90}; do
+for attempt in {1..120}; do
   sleep 3
   adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
 
-  # Réveil de l'écran
+  # Détection et réinitialisation si ADB est coincé en offline
+  if adb devices 2>/dev/null | grep -q "offline"; then
+    adb disconnect 127.0.0.1:5555 >/dev/null 2>&1 || true
+    sleep 1
+    adb connect 127.0.0.1:5555 >/dev/null 2>&1 || true
+  fi
+
+  # Impulsion de réveil et déverrouillage de l'écran
   adb -s 127.0.0.1:5555 shell input keyevent 82 >/dev/null 2>&1 || true
+  adb -s 127.0.0.1:5555 shell input keyevent 3 >/dev/null 2>&1 || true
 
   BOOT_OK=$(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || echo "0")
   if [ "$BOOT_OK" = "1" ]; then
-    echo "✅ ANDROID DÉMARRÉ AVEC SUCCÈS (sys.boot_completed = 1) à la tentative $attempt/90 !"
+    echo "✅ ANDROID DÉMARRÉ AVEC SUCCÈS (sys.boot_completed = 1) à la tentative $attempt/120 !"
     BOOT_SUCCESS=1
 
     # Configuration automatique du smartphone :
@@ -186,7 +206,7 @@ for attempt in {1..90}; do
     break
   else
     if [ $((attempt % 5)) -eq 0 ]; then
-      echo "Attente du chargement système Android... ($attempt/90)"
+      echo "Attente du chargement système Android... ($attempt/120)"
     fi
   fi
 done
