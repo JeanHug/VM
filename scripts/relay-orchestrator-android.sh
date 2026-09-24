@@ -29,6 +29,9 @@ cleanup_and_exit() {
   ./scripts/backup-sync-android.sh backup "$SESSION_ID" || true
   pkill -f cloudflared || true
   pkill -f "nokey@localhost.run" || true
+  pkill -9 -f qemu-system 2>/dev/null || true
+  pkill -9 -f websockify 2>/dev/null || true
+  pkill -9 -f android-bridge 2>/dev/null || true
   docker stop redroid14 android_kasm 2>/dev/null || true
   exit 0
 }
