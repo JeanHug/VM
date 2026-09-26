@@ -1,10 +1,10 @@
 /**
  * Cloudflare Worker: Relais Sécurisé d'Accès VM & Authentification
- * Déployable gratuitement sur Cloudflare Workers (workers.cloudflare.com)
+ * Passerelle sécurisée pour JeanHug/VM
+ * Déployé sous le nom "vm" (https://vm.hugdu77777.workers.dev)
  */
 
-const VALID_PIN = "1234"; // Mot de passe par défaut modifiable
-const GITHUB_TUNNELS_URL = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/tunnels.json";
+const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/JeanHug/VM/tunnel-url/";
 
 export default {
   async fetch(request, env, ctx) {
@@ -27,28 +27,42 @@ export default {
       "Cache-Control": "no-store, no-cache, must-revalidate",
     };
 
-    // Endpoint de statut / vérification
-    if (url.pathname === "/api/health") {
-      return new Response(JSON.stringify({ status: "ok", service: "VM Relay Worker" }), {
+    // Endpoint de statut / santé public (ne divulgue aucun secret ni tunnel)
+    if (url.pathname === "/api/health" || url.pathname === "/health") {
+      return new Response(JSON.stringify({ status: "ok", service: "VM Secure Relay Worker", script: "vm" }), {
         headers: corsHeaders,
       });
     }
 
-    // Récupération du mot de passe (POST body ou query param pin)
-    let userPassword = url.searchParams.get("pin") || url.searchParams.get("password");
-    if (request.method === "POST") {
-      try {
-        const body = await request.json();
-        userPassword = body.pin || body.password || userPassword;
-      } catch (e) {
-        // format non-JSON
+    // Récupération du mot de passe fourni par le client
+    let userPassword = url.searchParams.get("password") || url.searchParams.get("pin");
+    
+    // Vérification de l'en-tête Authorization (Bearer <pwd>)
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader) {
+      const match = authHeader.match(/^Bearer\s+(.*)$/i);
+      if (match) {
+        userPassword = match[1].trim();
+      } else if (!userPassword) {
+        userPassword = authHeader.trim();
       }
     }
 
-    const expectedPin = env.ACCESS_PIN || VALID_PIN;
+    // Si méthode POST, analyse du corps JSON
+    if (request.method === "POST") {
+      try {
+        const body = await request.json();
+        userPassword = body.password || body.pin || userPassword;
+      } catch (e) {
+        // Corps non-JSON, on garde la valeur des paramètres
+      }
+    }
 
-    // Validation du mot de passe
-    if (!userPassword || userPassword !== expectedPin) {
+    // Mot de passe secret attendu configuré dans l'environnement Cloudflare Worker (secret PASS)
+    const expectedPassword = env.PASS || env.ACCESS_PIN;
+
+    // Validation stricte du mot de passe
+    if (!expectedPassword || !userPassword || userPassword !== expectedPassword) {
       return new Response(
         JSON.stringify({
           authenticated: false,
@@ -58,33 +72,52 @@ export default {
       );
     }
 
-    // Mot de passe correct : Récupération en direct de l'URL du tunnel GitHub
+    // Authentification réussie : Récupération sécurisée des tunnels depuis GitHub
     try {
-      const ghRes = await fetch(`${GITHUB_TUNNELS_URL}?_t=${Date.now()}`, {
-        headers: { "User-Agent": "Cloudflare-VM-Relay" },
-      });
+      const timestamp = Date.now();
+      const fetchJson = async (filename) => {
+        try {
+          const res = await fetch(`${GITHUB_RAW_BASE}${filename}?_t=${timestamp}`, {
+            headers: { "User-Agent": "Cloudflare-VM-Relay" },
+            cf: { cacheTtl: 0, cacheEverything: false }
+          });
+          if (res.ok) {
+            return await res.json();
+          }
+        } catch (err) {
+          console.error(`Failed to fetch ${filename}:`, err);
+        }
+        return null;
+      };
 
-      if (!ghRes.ok) {
-        return new Response(
-          JSON.stringify({
-            authenticated: true,
-            status: "starting",
-            message: "VM en cours d'initialisation ou de relai...",
-            primary: null,
-          }),
-          { headers: corsHeaders }
-        );
+      const [dataLinux, dataAndroid, dataGeneric] = await Promise.all([
+        fetchJson("tunnels-linux.json"),
+        fetchJson("tunnels-android.json"),
+        fetchJson("tunnels.json")
+      ]);
+
+      const primaryLinux = dataLinux?.cloudflare || dataLinux?.primary || dataLinux?.lhrLife || dataGeneric?.cloudflare || dataGeneric?.primary || null;
+      const primaryAndroid = dataAndroid?.cloudflare || dataAndroid?.primary || dataAndroid?.lhrLife || null;
+
+      // Redirection directe si demandée via ?target=linux ou ?target=android
+      const target = url.searchParams.get("target")?.toLowerCase();
+      if (target === "linux" && primaryLinux) {
+        return Response.redirect(primaryLinux, 302);
+      }
+      if (target === "android" && primaryAndroid) {
+        const androidUrl = primaryAndroid.replace(/\/+$/, "") + "/#!action=stream&udid=127.0.0.1:5555&player=mse";
+        return Response.redirect(androidUrl, 302);
       }
 
-      const tunnelsData = await ghRes.json();
       return new Response(
         JSON.stringify({
           authenticated: true,
-          status: tunnelsData.status || "online",
-          primary: tunnelsData.primary || tunnelsData.lhrLife || tunnelsData.cloudflare,
-          lhrLife: tunnelsData.lhrLife,
-          cloudflare: tunnelsData.cloudflare,
-          updated_at: tunnelsData.updated_at,
+          status: "online",
+          linux: dataLinux || (dataGeneric ? { ...dataGeneric, name: "Ubuntu Linux Desktop" } : null),
+          android: dataAndroid || null,
+          primary: primaryLinux,
+          cloudflare: primaryLinux,
+          updated_at: dataLinux?.updated_at || dataAndroid?.updated_at || dataGeneric?.updated_at || new Date().toISOString(),
         }),
         { headers: corsHeaders }
       );
@@ -100,3 +133,4 @@ export default {
     }
   },
 };
+
