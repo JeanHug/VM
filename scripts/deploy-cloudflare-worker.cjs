@@ -11,7 +11,7 @@ const path = require('path');
 
 const accountId = process.env.CLOUDFLARE_ID || 'aeb92cddbb638d207038daf831a5aab2';
 const apiToken = process.env.CLOUDFLARE_TOKEN;
-const pass = process.env.PASS;
+const pass = '4374';
 const scriptName = 'vm';
 
 if (!apiToken) {

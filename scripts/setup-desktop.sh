@@ -43,6 +43,19 @@ server {
     proxy_request_buffering off;
     tcp_nodelay on;
 
+    # API d'interaction Linux pour agents IA & automatisation
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_buffering off;
+    }
+
     location / {
         proxy_pass https://127.0.0.1:6901;
         proxy_ssl_verify off;
@@ -79,7 +92,7 @@ echo "=== Installation et configuration garantie de Google Chrome & Docs ==="
 docker exec -u 0 kasm_desktop bash -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null 2>&1 || true
-  apt-get install -y -qq xclip xsel autocutsel wget curl gnupg ca-certificates wmctrl x11-utils > /dev/null 2>&1 || true
+  apt-get install -y -qq xclip xsel autocutsel wget curl gnupg ca-certificates wmctrl x11-utils scrot imagemagick xdotool netpbm > /dev/null 2>&1 || true
 
   # Synchronisation du presse-papier X11
   su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
@@ -226,4 +239,17 @@ SH_DOCS
   "
 '
 
-echo " Bureau Ubuntu configuré avec succès : Google Chrome et Google Docs 100% opérationnels !"
+# 5. Démarrage du Démon d'API REST Linux (Port 3001)
+echo "=== Démarrage du Démon d'API REST Linux (Port 3001) ==="
+pkill -f "linux-api-daemon.cjs" || true
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+nohup node "$SCRIPT_DIR/linux-api-daemon.cjs" > /tmp/linux-api-daemon.log 2>&1 &
+sleep 2
+if curl -s http://127.0.0.1:3001/api/health >/dev/null 2>&1; then
+  echo " Démon d'API REST Linux démarré et opérationnel sur port 3001 !"
+else
+  echo "⚠️ Avertissement : le démon d'API n'a pas répondu immédiatement, vérification des logs :"
+  cat /tmp/linux-api-daemon.log 2>/dev/null || true
+fi
+
+echo " Bureau Ubuntu configuré avec succès : Google Chrome, Google Docs et API REST 100% opérationnels !"
