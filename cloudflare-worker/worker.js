@@ -90,9 +90,9 @@ export default {
       }
     }
 
-    const expectedPassword = env.PASS || "4374";
+    const expectedPassword = env.PASS;
 
-    if (!userPassword || userPassword !== expectedPassword) {
+    if (!expectedPassword || !userPassword || userPassword !== expectedPassword) {
       return new Response(
         JSON.stringify({
           ok: false,
@@ -461,13 +461,13 @@ function generateDocsHtml(origin) {
     <!-- 1. Authentification -->
     <section id="auth">
       <h2>1. Authentification</h2>
-      <p>Toutes les requêtes (sauf <code>/api/health</code> et <code>/docs</code>) exigent le mot de passe secret configuré dans votre compte Cloudflare (actuellement <code>4374</code> pour les tests).</p>
+      <p>Toutes les requêtes (sauf <code>/api/health</code> et <code>/docs</code>) exigent votre mot de passe secret (variable <code>PASS</code> configurée dans votre compte Cloudflare).</p>
       
       <h3>3 méthodes acceptées :</h3>
       <ul>
-        <li><strong>En-tête HTTP (Recommandé) :</strong> <code>Authorization: Bearer 4374</code></li>
-        <li><strong>Paramètre URL :</strong> <code>?password=4374</code></li>
-        <li><strong>Corps JSON (POST/PUT) :</strong> <code>{ "password": "4374", ... }</code></li>
+        <li><strong>En-tête HTTP (Recommandé) :</strong> <code>Authorization: Bearer &lt;VOTRE_MOT_DE_PASSE&gt;</code></li>
+        <li><strong>Paramètre URL :</strong> <code>?password=&lt;VOTRE_MOT_DE_PASSE&gt;</code></li>
+        <li><strong>Corps JSON (POST/PUT) :</strong> <code>{ "password": "&lt;VOTRE_MOT_DE_PASSE&gt;", ... }</code></li>
       </ul>
     </section>
 
@@ -564,7 +564,7 @@ function generateDocsHtml(origin) {
       <h3>Exécuter une commande Bash :</h3>
       <pre>POST /api/linux/exec
 Content-Type: application/json
-Authorization: Bearer 4374
+Authorization: Bearer &lt;VOTRE_MOT_DE_PASSE&gt;
 
 {
   "command": "python3 -c 'import platform; print(platform.uname())'",
@@ -575,7 +575,7 @@ Authorization: Bearer 4374
       <h3>Contrôler la souris :</h3>
       <pre>POST /api/linux/mouse
 Content-Type: application/json
-Authorization: Bearer 4374
+Authorization: Bearer &lt;VOTRE_MOT_DE_PASSE&gt;
 
 {
   "action": "click",
@@ -586,7 +586,7 @@ Authorization: Bearer 4374
       <h3>Saisir du texte au clavier :</h3>
       <pre>POST /api/linux/keyboard
 Content-Type: application/json
-Authorization: Bearer 4374
+Authorization: Bearer &lt;VOTRE_MOT_DE_PASSE&gt;
 
 {
   "text": "echo 'Hello from AI Agent!'"
@@ -599,7 +599,7 @@ Authorization: Bearer 4374
       <div class="console-card">
         <div class="form-group">
           <label for="cfgPassword">Mot de passe secret :</label>
-          <input type="password" id="cfgPassword" value="4374" placeholder="Entrez le mot de passe">
+          <input type="password" id="cfgPassword" value="" placeholder="Entrez obligatoirement votre mot de passe pour tester" autocomplete="off" required>
         </div>
 
         <div class="form-group">
@@ -639,7 +639,7 @@ Authorization: Bearer 4374
       <p>Vous pouvez copier ce bloc de contexte directement dans les instructions de votre agent IA (Gemini, Claude, GPT) :</p>
       <pre>Tu disposes d'un accès complet à une machine Linux Ubuntu via l'API REST suivante :
 Base URL : ${origin}
-Mot de passe : 4374 (en-tête Authorization: Bearer 4374)
+Mot de passe : &lt;VOTRE_MOT_DE_PASSE&gt; (en-tête Authorization: Bearer &lt;VOTRE_MOT_DE_PASSE&gt;)
 
 - Pour exécuter des commandes : POST /api/linux/exec { "command": "votre commande" }
 - Pour voir l'écran : GET /api/linux/screenshot?format=base64
@@ -650,12 +650,6 @@ Mot de passe : 4374 (en-tête Authorization: Bearer 4374)
   </div>
 
   <script>
-    // Récupérer mot de passe dans l'URL si fourni
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('password')) {
-      document.getElementById('cfgPassword').value = urlParams.get('password');
-    }
-
     function handleEndpointChange() {
       const val = document.getElementById('cfgEndpoint').value;
       const [method] = val.split('|');
@@ -673,9 +667,16 @@ Mot de passe : 4374 (en-tête Authorization: Bearer 4374)
       const imgPreview = document.getElementById('imgPreview');
 
       resBox.style.display = 'block';
+      imgPreview.style.display = 'none';
+
+      if (!pwd && endpoint !== '/api/health') {
+        resStatus.textContent = 'Mot de passe requis';
+        resContent.textContent = 'Veuillez renseigner votre mot de passe secret dans le champ ci-dessus pour pouvoir envoyer cette requête.';
+        return;
+      }
+
       resStatus.textContent = 'En cours...';
       resContent.textContent = 'Requête transmise à la passerelle Cloudflare Worker...';
-      imgPreview.style.display = 'none';
 
       try {
         const fullUrl = '${origin}' + endpoint;

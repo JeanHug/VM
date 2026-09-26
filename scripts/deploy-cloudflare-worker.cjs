@@ -11,7 +11,7 @@ const path = require('path');
 
 const accountId = process.env.CLOUDFLARE_ID || 'aeb92cddbb638d207038daf831a5aab2';
 const apiToken = process.env.CLOUDFLARE_TOKEN;
-const pass = '4374';
+const pass = process.env.PASS || process.env.VM_PASS || process.argv[2];
 const scriptName = 'vm';
 
 if (!apiToken) {
@@ -20,7 +20,7 @@ if (!apiToken) {
 }
 
 if (!pass) {
-  console.error('❌ Erreur : variable PASS manquante dans l\'environnement.');
+  console.error('❌ Erreur : Mot de passe manquant (fournir variable d\'environnement PASS ou argument CLI).');
   process.exit(1);
 }
 
