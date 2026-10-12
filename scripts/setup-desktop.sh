@@ -30,6 +30,76 @@ docker run -d \
   -v "$DATA_DIR":/home/kasm-user \
   kasmweb/ubuntu-jammy-desktop:1.16.0
 
+# 1b. Sudo sans mot de passe pour kasm-user (l'agent IA peut apt-get install, etc.)
+echo "=== Sudo NOPASSWD pour kasm-user ==="
+for i in $(seq 1 30); do
+  docker exec -u root kasm_desktop true 2>/dev/null && break
+  sleep 2
+done
+docker exec -u root kasm_desktop bash -c \
+  'echo "kasm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kasm-user && chmod 440 /etc/sudoers.d/kasm-user' \
+  && echo "sudoers OK" || echo "sudoers : échec (non bloquant)"
+
+# 1c. Garde-fou agent.md / infos.md : recréation automatique si supprimés.
+# Les fichiers canoniques vivent dans le dépôt (scripts/agent-docs/) et sont
+# recopiés dans le dossier partagé. Le watchdog tourne sur le RUNNER (hors du
+# conteneur) : l'agent ne peut ni le voir ni l'arrêter.
+echo "=== Garde-fou agent.md / infos.md ==="
+SCRIPT_DIR_EARLY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+sudo mkdir -p "$DATA_DIR/user"
+sudo chown 1000:1000 "$DATA_DIR/user"
+for f in agent.md infos.md; do
+  if [ -f "$SCRIPT_DIR_EARLY/agent-docs/$f" ]; then
+    sudo cp -f "$SCRIPT_DIR_EARLY/agent-docs/$f" "$DATA_DIR/user/$f"
+    sudo chown 1000:1000 "$DATA_DIR/user/$f"
+    sudo chmod 644 "$DATA_DIR/user/$f"
+  fi
+done
+# user.md : fiche de l'utilisateur — JAMAIS écrasée si elle existe ;
+# restaurée depuis sa sauvegarde (.user.md.bak) si supprimée.
+if [ ! -s "$DATA_DIR/user/user.md" ]; then
+  if [ -s "$DATA_DIR/.user.md.bak" ]; then
+    sudo cp -f "$DATA_DIR/.user.md.bak" "$DATA_DIR/user/user.md"
+  elif [ -f "$SCRIPT_DIR_EARLY/agent-docs/user.md" ]; then
+    sudo cp -f "$SCRIPT_DIR_EARLY/agent-docs/user.md" "$DATA_DIR/user/user.md"
+  fi
+  sudo chown 1000:1000 "$DATA_DIR/user/user.md" 2>/dev/null || true
+  sudo chmod 644 "$DATA_DIR/user/user.md" 2>/dev/null || true
+fi
+cat << WATCHDOG_EOF | sudo tee /usr/local/bin/agent-docs-watchdog.sh > /dev/null
+#!/usr/bin/env bash
+# Recrée agent.md, infos.md et user.md dans le dossier partagé dès qu'ils manquent.
+# user.md (fiche utilisateur) est restauré en priorité depuis sa sauvegarde.
+SRC="\$1"; DST="\$2"; BK="\$3"
+while true; do
+  for f in agent.md infos.md; do
+    if [ ! -s "\$DST/\$f" ] && [ -s "\$SRC/\$f" ]; then
+      cp -f "\$SRC/\$f" "\$DST/\$f" 2>/dev/null || sudo cp -f "\$SRC/\$f" "\$DST/\$f"
+      chown 1000:1000 "\$DST/\$f" 2>/dev/null || sudo chown 1000:1000 "\$DST/\$f" 2>/dev/null
+      chmod 644 "\$DST/\$f" 2>/dev/null || true
+      echo "[\$(date +'%T')] Restauré : \$f"
+    fi
+  done
+  if [ ! -s "\$DST/user.md" ]; then
+    if [ -s "\$BK" ]; then
+      cp -f "\$BK" "\$DST/user.md" 2>/dev/null || sudo cp -f "\$BK" "\$DST/user.md"
+    elif [ -s "\$SRC/user.md" ]; then
+      cp -f "\$SRC/user.md" "\$DST/user.md" 2>/dev/null || sudo cp -f "\$SRC/user.md" "\$DST/user.md"
+    fi
+    chown 1000:1000 "\$DST/user.md" 2>/dev/null || sudo chown 1000:1000 "\$DST/user.md" 2>/dev/null
+    chmod 644 "\$DST/user.md" 2>/dev/null || true
+    echo "[\$(date +'%T')] Restauré : user.md"
+  fi
+  sleep 30
+done
+WATCHDOG_EOF
+sudo chmod +x /usr/local/bin/agent-docs-watchdog.sh
+sudo pkill -f agent-docs-watchdog 2>/dev/null || true
+sudo nohup /usr/local/bin/agent-docs-watchdog.sh "$SCRIPT_DIR_EARLY/agent-docs" "$DATA_DIR/user" "$DATA_DIR/.user.md.bak" \
+  > /tmp/agent-docs-watchdog.log 2>&1 &
+echo "watchdog agent-docs démarré (vérification toutes les 30 s)"
+
+
 # 2. Configuration du reverse-proxy NGINX ultra-rapide
 echo "=== Configuration du reverse-proxy NGINX (Zéro latence) ==="
 sudo apt-get update -qq && sudo apt-get install -y -qq nginx > /dev/null 2>&1
@@ -93,6 +163,15 @@ docker exec -u 0 kasm_desktop bash -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null 2>&1 || true
   apt-get install -y -qq xclip xsel autocutsel wget curl gnupg ca-certificates wmctrl x11-utils scrot imagemagick xdotool netpbm > /dev/null 2>&1 || true
+  # Visionneuse & exécution : conversion Office (pptx→pdf), figures matplotlib
+  apt-get install -y -qq --no-install-recommends libreoffice-core ure libreoffice-impress libreoffice-writer fonts-liberation python3-matplotlib > /dev/null 2>&1 || true
+
+  # Playwright + Chromium pour tests réels (bugs de rendu, etc.)
+  # Le dépôt hashicorp expiré casse apt update : supprimé.
+  rm -f /etc/apt/sources.list.d/hashicorp.list
+  su - kasm-user -c "python3 -m playwright --version >/dev/null 2>&1 || pip3 install --quiet playwright" || true
+  su - kasm-user -c "python3 -m playwright install-deps chromium >/dev/null 2>&1" || true
+  su - kasm-user -c "python3 -m playwright install chromium >/dev/null 2>&1" || true
 
   # Synchronisation du presse-papier X11
   su - kasm-user -c "autocutsel -fork >/dev/null 2>&1 || true"
